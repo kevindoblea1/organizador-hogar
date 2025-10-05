@@ -1,0 +1,335 @@
+:root {
+    /* Base */
+    --bg: #0b1220;
+    /* fondo base azul muy oscuro */
+    --ink: #e6f0ff;
+    /* texto principal */
+    --muted: #98a8c3;
+    /* texto secundario */
+    --line: #1e2a3f;
+    /* bordes sutiles */
+
+    /* Superficies */
+    --surface: #0f1a2e;
+    /* tarjetas */
+    --surface-2: #0c1627;
+    /* header/contorno */
+
+    /* Marca (turquesa/teal neon) */
+    --grad-a: #00e5ff;
+    --grad-b: #00ffa6;
+
+    /* Estado */
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+
+    --radius: 16px;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+
+* {
+    box-sizing: border-box
+}
+
+html,
+body {
+    height: 100%
+}
+
+body {
+    margin: 0 auto;
+    padding: 28px;
+    max-width: 1120px;
+    font: 15px/1.55 system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Hero blur shape */
+.bg-hero {
+    position: fixed;
+    inset: -20vh -10vw auto -10vw;
+    height: 60vh;
+    background: radial-gradient(1200px 300px at 40% 30%, #0be7ff30, transparent 70%),
+        radial-gradient(900px 260px at 70% 10%, #00ffa630, transparent 70%),
+        linear-gradient(120deg, #06111f 0%, #061a26 60%, #06272a 100%);
+    filter: blur(16px) saturate(110%);
+    z-index: -1;
+}
+
+/* Header & Tabs */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+    background: linear-gradient(180deg, var(--surface-2), transparent);
+    border: 1px solid var(--line);
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    color: #001a1a;
+    background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+}
+
+.header h1 {
+    font-size: clamp(20px, 3.2vw, 28px);
+    margin: 0;
+    letter-spacing: .2px
+}
+
+.tabs {
+    display: flex;
+    gap: 10px
+}
+
+.tabs button {
+    padding: 10px 16px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .15s ease;
+    font-weight: 700;
+}
+
+.tabs button:hover {
+    transform: translateY(-1px)
+}
+
+.tabs button.active {
+    color: #001a1a;
+    background: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    border-color: transparent;
+    box-shadow: var(--shadow);
+}
+
+main {
+    margin-top: 14px
+}
+
+.tab {
+    display: none
+}
+
+.tab.active {
+    display: block
+}
+
+/* Cards / Layout */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow);
+}
+
+.card h3 {
+    margin: 0 0 12px;
+    font-size: 18px
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px
+}
+
+@media (max-width: 860px) {
+    .grid-2 {
+        grid-template-columns: 1fr
+    }
+}
+
+.row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap
+}
+
+/* Inputs */
+.card input,
+.card select {
+    appearance: none;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #0a1426;
+    color: var(--ink);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.card input::placeholder,
+.card select:placeholder {
+    color: #7b8fab
+}
+
+.card input:focus,
+.card select:focus {
+    border-color: #1ec7ff;
+    box-shadow: 0 0 0 4px #00e7ff22;
+}
+
+.card label {
+    display: block;
+    font-weight: 700;
+    color: #c7d4ee;
+    margin-bottom: 6px
+}
+
+.card label input,
+.card label select {
+    margin-top: 6px
+}
+
+/* Buttons */
+.card button,
+.btn {
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    background: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    color: #001a1a;
+    font-weight: 900;
+    letter-spacing: .2px;
+    box-shadow: var(--shadow);
+    transition: transform .05s ease, filter .2s ease;
+}
+
+.card button:hover,
+.btn:hover {
+    filter: brightness(1.08)
+}
+
+.card button:active,
+.btn:active {
+    transform: translateY(1px)
+}
+
+.btn-ok {
+    background: linear-gradient(90deg, #16e38a, #13d172)
+}
+
+.btn-warn {
+    background: linear-gradient(90deg, #ffd166, #f59e0b);
+    color: #1a1300
+}
+
+.btn-danger {
+    background: linear-gradient(90deg, #ff7b7b, #ef4444);
+    color: #1a0000
+}
+
+/* Lists */
+.list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 12px
+}
+
+.item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 12px;
+    background: #0b162a;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.item strong {
+    font-weight: 800
+}
+
+.meta {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin-top: 4px
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    align-items: center
+}
+
+/* Chips / Badges */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid var(--line);
+    background: #0a1426;
+    color: #9fc7ff;
+}
+
+/* Progress */
+.progress {
+    height: 10px;
+    border-radius: 999px;
+    background: #0a1426;
+    overflow: hidden;
+    border: 1px solid var(--line)
+}
+
+.progress>div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--grad-a), var(--grad-b))
+}
+
+/* Misc */
+.sep {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 14px 0
+}
+
+.foot {
+    margin-top: 16px;
+    color: var(--muted);
+    text-align: center;
+    font-size: 12px
+}
+
+.mono {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap
+}
+
+.filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px
+}
