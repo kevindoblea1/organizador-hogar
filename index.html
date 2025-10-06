@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hogar — Tareas & Finanzas</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Evita FOUC de contenido privado -->
   <style>
-    #app-private { display:none }
+    /* Utilidad para ocultar secciones hasta login */
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -18,35 +18,34 @@
       <div class="logo">H</div>
       <h1>Hogar</h1>
     </div>
-
     <nav class="tabs">
       <button data-tab="tareas" class="active">Tareas</button>
       <button data-tab="finanzas">Finanzas</button>
     </nav>
-
     <div class="row">
-      <span class="badge">Sesión: <strong id="session-state">No iniciada</strong></span>
+      <span id="session-badge" class="badge">Sesión: —</span>
       <button id="btn-logout" class="btn btn-warn" disabled>Cerrar sesión</button>
     </div>
   </header>
 
   <main>
-    <!-- LOGIN (público) -->
+    <!-- LOGIN (visible por defecto) -->
     <section id="auth-guard" class="card">
       <h3>Iniciar sesión</h3>
-      <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
-      <input id="auth-pass" placeholder="Contraseña" type="password" autocomplete="current-password" />
-      <div class="row">
-        <button id="btn-auth-login" class="btn">Entrar</button>
-      </div>
+      <form id="form-login" class="row" style="flex-direction:column; gap:8px; width:100%">
+        <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
+        <input id="auth-pass" placeholder="Contraseña" type="password" autocomplete="current-password" />
+        <button id="btn-login" type="submit" class="btn" style="align-self:flex-start">Entrar</button>
+      </form>
       <div class="meta" style="margin-top:8px">
         Usa las cuentas que creaste en Firebase Authentication (Correo/Contraseña).
       </div>
+      <div id="login-msg" class="meta" style="margin-top:6px;"></div>
     </section>
 
-    <!-- APP PRIVADA (oculta si no hay sesión) -->
-    <div id="app-private">
-      <!-- ============ TAREAS ============ -->
+    <!-- APP (oculta hasta que Firebase confirme sesión válida) -->
+    <section id="app" class="hidden">
+      <!-- TAREAS -->
       <section id="tareas" class="tab active">
         <div class="grid-2">
           <form id="form-tarea" class="card">
@@ -98,8 +97,9 @@
         </div>
       </section>
 
-      <!-- ============ FINANZAS ============ -->
+      <!-- FINANZAS -->
       <section id="finanzas" class="tab">
+        <!-- Selector de periodo -->
         <div class="card">
           <div class="row" style="margin-top:8px">
             <label style="flex:1">Ir a
@@ -107,6 +107,7 @@
             </label>
             <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
           </div>
+
           <strong>Mes en curso:</strong>
           <span id="curr-period" class="badge"></span>
           <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
@@ -183,13 +184,12 @@
           <ul id="lista-gastos" class="list"></ul>
         </div>
       </section>
-    </div>
+    </section>
   </main>
 
-  <footer class="foot mono">
-    Conectado a Firebase (Firestore).
-  </footer>
+  <footer class="foot mono">Conectado a Firebase (Firestore).</footer>
 
+  <!-- Tu lógica -->
   <script defer type="module" src="main.js"></script>
 </body>
 </html>
