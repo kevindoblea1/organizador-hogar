@@ -3,7 +3,7 @@
 ======================= */
 import {
   db, auth, HOGAR_ID,
-  onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut,
+  onAuthStateChanged, signInWithEmailAndPassword, signOut,
   collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc,
   deleteDoc, setDoc, orderBy, limit
 } from "./firebase.js";
@@ -18,6 +18,9 @@ const systemMonth = () => new Date().toISOString().slice(0,7);
 const isYYYYMM = (s) => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 const nextMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`; };
 const previousMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+
+const ROLES = { esposa: 'Esposa', esposo: 'Esposo' };
+const DEFAULT_INCOME = { esposa: 18800, esposo: 27000 };
 
 /* =======================
    Estado UI / Periodo
@@ -38,14 +41,57 @@ const colIngresos     = collection(db, 'hogares', HOGAR_ID, 'ingresos'); // docI
 const colCerrados     = collection(db, 'hogares', HOGAR_ID, 'cerrados'); // docId = YYYY-MM {cerrado:true}
 
 /* =======================
-   Auth mínima (dev)
+   DOM refs y Tabs
 ======================= */
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    try { await signInAnonymously(auth); }
-    catch (e) { console.error(e); alert('Activa Authentication en Firebase.'); }
-  }
-});
+const tabs = document.querySelectorAll('.tabs button');
+const sections = document.querySelectorAll('.tab');
+tabs.forEach(btn => btn.addEventListener('click', () => {
+  tabs.forEach(b => b.classList.remove('active'));
+  sections.forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.tab).classList.add('active');
+}));
+
+/* ---------- TAREAS UI ---------- */
+const formT = document.getElementById('form-tarea');
+const listaT = document.getElementById('lista-tareas');
+const tFiltroPersona = document.getElementById('t-filtro-persona');
+const tFiltroEstado = document.getElementById('t-filtro-estado');
+const tMetricas = document.getElementById('t-metricas');
+
+/* ---------- FINANZAS UI ---------- */
+const formG = document.getElementById('form-gasto');
+const listaG = document.getElementById('lista-gastos');
+const formP = document.getElementById('form-presupuesto');
+const listaP = document.getElementById('lista-presupuestos');
+const rPeriodo = document.getElementById('r-periodo');
+const rBtn = document.getElementById('r-cargar');
+const rOut = document.getElementById('r-out');
+
+const pPeriodo = document.getElementById('p-periodo');
+const ingEsposa = document.getElementById('ing-esposa');
+const ingEsposo = document.getElementById('ing-esposo');
+const ingInfo = document.getElementById('ing-info');
+const btnGuardarIngresos = document.getElementById('btn-guardar-ingresos');
+const btnTraerAnterior = document.getElementById('btn-traer-anterior');
+
+const currPeriodSpan = document.getElementById('curr-period');
+const currEstado = document.getElementById('curr-estado');
+const btnIrMesActual = document.getElementById('btn-ir-mes-actual');
+const btnCerrarMes = document.getElementById('btn-cerrar-mes');
+const btnReabrirMes = document.getElementById('btn-reabrir-mes');
+const monthSelect = document.getElementById('goto-period');
+const btnIrPeriodo = document.getElementById('btn-ir-periodo');
+
+/* ---------- AUTH UI ---------- */
+const who        = document.getElementById('who');
+const guard      = document.getElementById('auth-guard');
+const btnLogin   = document.getElementById('btn-login');
+const btnLogout  = document.getElementById('btn-logout');
+const formLogin  = document.getElementById('form-login');
+const loginEmail = document.getElementById('login-email');
+const loginPass  = document.getElementById('login-pass');
+const loginMsg   = document.getElementById('login-msg');
 
 /* =======================
    Datos: Ingresos / Cerrado
@@ -53,11 +99,10 @@ onAuthStateChanged(auth, async (user) => {
 async function getIncomes(period) {
   const snap = await getDoc(doc(colIngresos, period));
   if (snap.exists()) return { esposa:+(snap.data().esposa||0), esposo:+(snap.data().esposo||0) };
-  // cascada: busca el anterior
   const prev = previousMonth(period);
   const s2 = await getDoc(doc(colIngresos, prev));
   if (s2.exists()) return { esposa:+(s2.data().esposa||0), esposo:+(s2.data().esposo||0) };
-  return { esposa: 0, esposo: 0 };
+  return { ...DEFAULT_INCOME };
 }
 async function setIncomes(period, data) {
   await setDoc(doc(colIngresos, period), { esposa:+data.esposa||0, esposo:+data.esposo||0 }, { merge: true });
@@ -66,7 +111,7 @@ async function isClosed(period) {
   const s = await getDoc(doc(colCerrados, period)); return s.exists();
 }
 async function markClosed(period) {
-  await setDoc(doc(colCerrados, period), { cerrado: true, at: Date.now() });
+  await setDoc(doc(colCerrados, period), { cerrado: true });
 }
 async function unmarkClosed(period) {
   await deleteDoc(doc(colCerrados, period)).catch(()=>{});
@@ -116,21 +161,13 @@ async function deletePresupuesto(periodo, categoria) {
 }
 
 /* =======================
-   Meses conocidos (para dropdown)
+   Meses conocidos (dropdown)
 ======================= */
 async function knownPeriods() {
   const set = new Set([CURRENT_PERIOD]);
-
-  const [ing, pre, cer] = await Promise.all([
-    getDocs(colIngresos),
-    getDocs(colPresupuestos),
-    getDocs(colCerrados)
-  ]);
-
+  const [ing, pre] = await Promise.all([ getDocs(colIngresos), getDocs(colPresupuestos) ]);
   ing.docs.forEach(d => set.add(d.id));
   pre.docs.forEach(d => d.data().periodo && set.add(d.data().periodo));
-  cer.docs.forEach(d => set.add(d.id));
-
   return Array.from(set).sort();
 }
 function monthsAround(center, back=3, forward=3) {
@@ -145,25 +182,7 @@ function monthsAround(center, back=3, forward=3) {
   return Array.from(new Set(out));
 }
 
-/* =======================
-   DOM refs y Tabs
-======================= */
-const tabs = document.querySelectorAll('.tabs button');
-const sections = document.querySelectorAll('.tab');
-tabs.forEach(btn => btn.addEventListener('click', () => {
-  tabs.forEach(b => b.classList.remove('active'));
-  sections.forEach(s => s.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById(btn.dataset.tab).classList.add('active');
-}));
-
-/* ---------- TAREAS UI ---------- */
-const formT = document.getElementById('form-tarea');
-const listaT = document.getElementById('lista-tareas');
-const tFiltroPersona = document.getElementById('t-filtro-persona');
-const tFiltroEstado = document.getElementById('t-filtro-estado');
-const tMetricas = document.getElementById('t-metricas');
-
+/* ---------- TAREAS eventos ---------- */
 formT.addEventListener('submit', async (e) => {
   e.preventDefault();
   const tarea = {
@@ -180,7 +199,6 @@ formT.addEventListener('submit', async (e) => {
   await addTarea(tarea);
   formT.reset(); await renderTareas();
 });
-
 tFiltroPersona.addEventListener('change', renderTareas);
 tFiltroEstado.addEventListener('change', renderTareas);
 
@@ -190,7 +208,7 @@ async function renderTareas() {
   const tareas = await listTareas();
   listaT.innerHTML = '';
 
-  // métricas semanales (últimos 7 días)
+  // métricas semanales (7 días)
   const semanaMs = 7 * 24 * 3600 * 1000;
   const now = Date.now();
   const sem = tareas.filter(t => now - new Date(t.creado_en).getTime() < semanaMs);
@@ -231,38 +249,11 @@ Pendientes        →  Esposa: ${puntosPend.esposa}  | Esposo: ${puntosPend.espo
     });
 }
 
-/* ---------- FINANZAS UI ---------- */
-const formG = document.getElementById('form-gasto');
-const listaG = document.getElementById('lista-gastos');
-const formP = document.getElementById('form-presupuesto');
-const listaP = document.getElementById('lista-presupuestos');
-const rPeriodo = document.getElementById('r-periodo');
-const rBtn = document.getElementById('r-cargar');
-const rOut = document.getElementById('r-out');
-
-const pPeriodo = document.getElementById('p-periodo');
-const ingEsposa = document.getElementById('ing-esposa');
-const ingEsposo = document.getElementById('ing-esposo');
-const ingInfo = document.getElementById('ing-info');
-const btnGuardarIngresos = document.getElementById('btn-guardar-ingresos');
-const btnTraerAnterior = document.getElementById('btn-traer-anterior');
-
-const currPeriodSpan = document.getElementById('curr-period');
-const currEstado = document.getElementById('curr-estado');
-const btnIrMesActual = document.getElementById('btn-ir-mes-actual');
-const btnCerrarMes = document.getElementById('btn-cerrar-mes');
-const btnReabrirMes = document.getElementById('btn-reabrir-mes');
-const monthSelect = document.getElementById('goto-period');
-const btnIrPeriodo = document.getElementById('btn-ir-periodo');
-
+/* ---------- FINANZAS eventos ---------- */
 document.getElementById('g-fecha').value = today();
-
-/* --- Inicio --- */
 pPeriodo.value = CURRENT_PERIOD;
 rPeriodo.value = CURRENT_PERIOD;
-await onPeriodChange();   // pinta todo al cargar
 
-/* Formularios */
 formG.addEventListener('submit', async (e) => {
   e.preventDefault();
   const fecha = document.getElementById('g-fecha').value || today();
@@ -291,7 +282,6 @@ formP.addEventListener('submit', async (e) => {
   await renderAllFinance();
 });
 
-/* Ingresos */
 btnGuardarIngresos.addEventListener('click', async () => {
   const periodo = pPeriodo.value || CURRENT_PERIOD;
   await setIncomes(periodo, { esposa: ingEsposa.value, esposo: ingEsposo.value });
@@ -299,7 +289,6 @@ btnGuardarIngresos.addEventListener('click', async () => {
   await renderAllFinance();
 });
 
-/* Traer del mes anterior */
 btnTraerAnterior?.addEventListener('click', async () => {
   const target = pPeriodo.value || CURRENT_PERIOD;
   const prev = previousMonth(target);
@@ -322,10 +311,8 @@ btnTraerAnterior?.addEventListener('click', async () => {
   alert(`Importado desde ${prev}: ingresos + ${added} presupuesto(s).`);
 });
 
-/* Resumen */
 rBtn.addEventListener('click', async (e) => { e.preventDefault(); await renderResumen(); });
 
-/* Mes en curso (cabecera) */
 btnIrMesActual.addEventListener('click', async () => {
   setCurrentPeriod(systemMonth());
   await onPeriodChange();
@@ -337,7 +324,6 @@ btnCerrarMes.addEventListener('click', async () => {
 
   await markClosed(current);
 
-  // Copiar presupuestos e ingresos al siguiente
   const next = nextMonth(current);
   const presActual = await listPresupuestos(current);
   for (const b of presActual) await upsertPresupuesto(next, b.categoria, b.tope);
@@ -348,7 +334,6 @@ btnCerrarMes.addEventListener('click', async () => {
   alert(`Mes ${current} cerrado. Nuevo mes en curso: ${next}.`);
 });
 
-/* Cambiar al mes seleccionado en el dropdown */
 btnIrPeriodo.addEventListener('click', async () => {
   const target = monthSelect.value;
   if (!isYYYYMM(target)) { alert('Selecciona un mes válido.'); return; }
@@ -356,7 +341,6 @@ btnIrPeriodo.addEventListener('click', async () => {
   await onPeriodChange();
 });
 
-/* Reabrir el mes actual */
 btnReabrirMes.addEventListener('click', async () => {
   const current = CURRENT_PERIOD;
   if (!(await isClosed(current))) { alert('Este mes no está cerrado.'); return; }
@@ -366,11 +350,7 @@ btnReabrirMes.addEventListener('click', async () => {
 });
 
 /* ----- Render helpers ----- */
-async function renderAllFinance() {
-  await renderGastos();
-  await renderPresupuestos();
-  await renderResumen();
-}
+async function renderAllFinance() { await renderGastos(); await renderPresupuestos(); await renderResumen(); }
 
 async function renderGastos() {
   const gastos = await listGastos();
@@ -494,3 +474,45 @@ async function onPeriodChange() {
   await renderAllFinance();
   await refreshMonthDropdown();
 }
+
+/* =======================
+   AUTH: login / logout
+======================= */
+btnLogin.onclick = () => { guard.style.display = ''; loginEmail.focus(); };
+btnLogout.onclick = () => signOut(auth);
+
+formLogin.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loginMsg.textContent = 'Ingresando...';
+  try {
+    await signInWithEmailAndPassword(auth, loginEmail.value, loginPass.value);
+    loginMsg.textContent = '';
+    guard.style.display = 'none';
+  } catch (err) {
+    const map = {
+      'auth/invalid-credential': 'Credenciales inválidas.',
+      'auth/user-not-found': 'Usuario no encontrado.',
+      'auth/wrong-password': 'Contraseña incorrecta.',
+      'auth/too-many-requests': 'Demasiados intentos; espera un momento.'
+    };
+    loginMsg.textContent = map[err.code] || ('Error: ' + err.code);
+  }
+});
+
+/* Cuando cambia la sesión… */
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    who.textContent = user.email || 'Usuario';
+    btnLogin.style.display = 'none';
+    btnLogout.style.display = '';
+    guard.style.display = 'none';
+    // ahora sí cargamos datos
+    await onPeriodChange();
+    await renderTareas();
+  } else {
+    who.textContent = 'Sesión no iniciada';
+    btnLogin.style.display = '';
+    btnLogout.style.display = 'none';
+    guard.style.display = '';
+  }
+});

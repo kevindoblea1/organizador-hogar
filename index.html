@@ -14,11 +14,33 @@
       <div class="logo">H</div>
       <h1>Hogar</h1>
     </div>
+
     <nav class="tabs">
       <button data-tab="tareas" class="active">Tareas</button>
       <button data-tab="finanzas">Finanzas</button>
     </nav>
+
+    <!-- Estado de sesión -->
+    <div class="row" style="margin-left:auto;gap:8px">
+      <span id="who" class="meta">Sesión no iniciada</span>
+      <button id="btn-login" class="btn">Iniciar sesión</button>
+      <button id="btn-logout" class="btn btn-warn" style="display:none">Salir</button>
+    </div>
   </header>
+
+  <!-- Login simple (se muestra si no hay sesión) -->
+  <section id="auth-guard" class="card" style="display:none">
+    <h3>Iniciar sesión</h3>
+    <form id="form-login" class="row" style="gap:8px">
+      <input id="login-email" type="email" placeholder="Correo" required />
+      <input id="login-pass" type="password" placeholder="Contraseña" required />
+      <button>Entrar</button>
+      <span id="login-msg" class="meta"></span>
+    </form>
+    <div class="meta" style="margin-top:6px">
+      Usa las cuentas que ya creaste en Authentication (ej. <strong>kevin.alvarenga93@gmail.com</strong>).
+    </div>
+  </section>
 
   <main>
     <!-- TAREAS -->
@@ -75,24 +97,18 @@
 
     <!-- FINANZAS -->
     <section id="finanzas" class="tab">
-      <!-- Control de periodo -->
       <div class="card">
-        <h3>Periodo</h3>
-        <div class="row">
-          <strong>Mes en curso:</strong>
-          <span id="curr-period" class="badge"></span>
-          <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
-          <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
-          <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
-        </div>
-
         <div class="row" style="margin-top:8px">
-          <label>Ir a
+          <label style="flex:1">Ir a
             <select id="goto-period"></select>
           </label>
           <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
         </div>
-
+        <strong>Mes en curso:</strong>
+        <span id="curr-period" class="badge"></span>
+        <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
+        <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
+        <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
         <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
       </div>
 
