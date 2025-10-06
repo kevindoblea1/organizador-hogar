@@ -5,10 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hogar — Tareas & Finanzas</title>
   <link rel="stylesheet" href="style.css" />
-  <style>
-    /* Utilidad para ocultar secciones hasta login */
-    .hidden { display: none !important; }
-  </style>
 </head>
 <body>
   <div class="bg-hero"></div>
@@ -18,33 +14,33 @@
       <div class="logo">H</div>
       <h1>Hogar</h1>
     </div>
+
     <nav class="tabs">
       <button data-tab="tareas" class="active">Tareas</button>
       <button data-tab="finanzas">Finanzas</button>
     </nav>
-    <div class="row">
-      <span id="session-badge" class="badge">Sesión: —</span>
-      <button id="btn-logout" class="btn btn-warn" disabled>Cerrar sesión</button>
-    </div>
+
+    <span id="login-state" class="badge">Sesión: —</span>
+    <button id="btn-logout" class="btn btn-warn" style="display:none">Cerrar sesión</button>
   </header>
 
   <main>
-    <!-- LOGIN (visible por defecto) -->
+    <!-- ========== LOGIN (visible por defecto) ========== -->
     <section id="auth-guard" class="card">
       <h3>Iniciar sesión</h3>
-      <form id="form-login" class="row" style="flex-direction:column; gap:8px; width:100%">
-        <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
-        <input id="auth-pass" placeholder="Contraseña" type="password" autocomplete="current-password" />
-        <button id="btn-login" type="submit" class="btn" style="align-self:flex-start">Entrar</button>
-      </form>
-      <div class="meta" style="margin-top:8px">
+      <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
+      <input id="auth-pass"  placeholder="Contraseña" type="password" autocomplete="current-password" />
+      <div class="row">
+        <button id="btn-auth-login" class="btn" type="button">Entrar</button>
+      </div>
+      <div id="login-msg" class="meta" style="margin-top:8px"></div>
+      <div class="meta">
         Usa las cuentas que creaste en Firebase Authentication (Correo/Contraseña).
       </div>
-      <div id="login-msg" class="meta" style="margin-top:6px;"></div>
     </section>
 
-    <!-- APP (oculta hasta que Firebase confirme sesión válida) -->
-    <section id="app" class="hidden">
+    <!-- ========== APP (oculta hasta login) ========== -->
+    <div id="app-shell" style="display:none">
       <!-- TAREAS -->
       <section id="tareas" class="tab active">
         <div class="grid-2">
@@ -99,20 +95,20 @@
 
       <!-- FINANZAS -->
       <section id="finanzas" class="tab">
-        <!-- Selector de periodo -->
+        <!-- Control de periodo -->
         <div class="card">
+          <strong>Mes en curso:</strong>
+          <span id="curr-period" class="badge"></span>
+          <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
+          <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
+          <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
+
           <div class="row" style="margin-top:8px">
             <label style="flex:1">Ir a
               <select id="goto-period"></select>
             </label>
             <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
           </div>
-
-          <strong>Mes en curso:</strong>
-          <span id="curr-period" class="badge"></span>
-          <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
-          <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
-          <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
 
           <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
         </div>
@@ -138,10 +134,14 @@
           <div class="card">
             <h3>Presupuesto por categoría (periodo actual)</h3>
             <form id="form-presupuesto">
-              <input id="p-periodo" placeholder="Periodo YYYY-MM" readonly />
+              <input id="p-periodo" placeholder="Periodo YYYY-MM" readonly
+                     title="Se usa el mes en curso; cambia el mes arriba si lo necesitas." />
               <input id="p-categoria" placeholder="Categoría (ej. Luz)" />
               <label>Tope (L) <input id="p-tope" type="number" min="0" step="0.01" /></label>
               <button>Guardar presupuesto</button>
+              <div class="meta" style="margin-top:6px">
+                Tip: los gastos actualizan automáticamente el % de uso en “Presupuestos y uso”.
+              </div>
             </form>
 
             <hr class="sep"/>
@@ -184,12 +184,13 @@
           <ul id="lista-gastos" class="list"></ul>
         </div>
       </section>
-    </section>
+    </div>
   </main>
 
-  <footer class="foot mono">Conectado a Firebase (Firestore).</footer>
+  <footer class="foot mono">
+    Conectado a Firebase (Firestore).
+  </footer>
 
-  <!-- Tu lógica -->
   <script defer type="module" src="main.js"></script>
 </body>
 </html>
