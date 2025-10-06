@@ -3,7 +3,7 @@
 ======================= */
 import {
   db, auth, HOGAR_ID,
-  onAuthStateChanged, signInWithEmailAndPassword, signOut, signInAnonymously,
+  onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut,
   collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc,
   deleteDoc, setDoc, orderBy, limit
 } from "./firebase.js";
@@ -18,10 +18,6 @@ const systemMonth = () => new Date().toISOString().slice(0,7);
 const isYYYYMM = (s) => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 const nextMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`; };
 const previousMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-const ROLES = { esposa: 'Esposa', esposo: 'Esposo' };
-const DEFAULT_INCOME = { esposa: 18800, esposo: 27000 };
 
 /* =======================
    Estado UI / Periodo
@@ -43,13 +39,11 @@ const colCerrados     = collection(db, 'hogares', HOGAR_ID, 'cerrados'); // docI
 
 /* =======================
    Auth mínima (dev)
-   - Si estás logueado, sigue.
-   - Si no, entra anónimo (para no bloquear).
-   Luego puedes cambiar a Email/Password.
 ======================= */
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    try { await signInAnonymously(auth); } catch (e) { console.error(e); alert('Activa Authentication en Firebase.'); }
+    try { await signInAnonymously(auth); }
+    catch (e) { console.error(e); alert('Activa Authentication en Firebase.'); }
   }
 });
 
@@ -63,7 +57,7 @@ async function getIncomes(period) {
   const prev = previousMonth(period);
   const s2 = await getDoc(doc(colIngresos, prev));
   if (s2.exists()) return { esposa:+(s2.data().esposa||0), esposo:+(s2.data().esposo||0) };
-  return { ...DEFAULT_INCOME };
+  return { esposa: 0, esposo: 0 };
 }
 async function setIncomes(period, data) {
   await setDoc(doc(colIngresos, period), { esposa:+data.esposa||0, esposo:+data.esposo||0 }, { merge: true });
@@ -72,7 +66,7 @@ async function isClosed(period) {
   const s = await getDoc(doc(colCerrados, period)); return s.exists();
 }
 async function markClosed(period) {
-  await setDoc(doc(colCerrados, period), { cerrado: true });
+  await setDoc(doc(colCerrados, period), { cerrado: true, at: Date.now() });
 }
 async function unmarkClosed(period) {
   await deleteDoc(doc(colCerrados, period)).catch(()=>{});
@@ -127,12 +121,15 @@ async function deletePresupuesto(periodo, categoria) {
 async function knownPeriods() {
   const set = new Set([CURRENT_PERIOD]);
 
-  const [ing, pre] = await Promise.all([
+  const [ing, pre, cer] = await Promise.all([
     getDocs(colIngresos),
     getDocs(colPresupuestos),
+    getDocs(colCerrados)
   ]);
+
   ing.docs.forEach(d => set.add(d.id));
   pre.docs.forEach(d => d.data().periodo && set.add(d.data().periodo));
+  cer.docs.forEach(d => set.add(d.id));
 
   return Array.from(set).sort();
 }
@@ -369,7 +366,11 @@ btnReabrirMes.addEventListener('click', async () => {
 });
 
 /* ----- Render helpers ----- */
-async function renderAllFinance() { await renderGastos(); await renderPresupuestos(); await renderResumen(); }
+async function renderAllFinance() {
+  await renderGastos();
+  await renderPresupuestos();
+  await renderResumen();
+}
 
 async function renderGastos() {
   const gastos = await listGastos();

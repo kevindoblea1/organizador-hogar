@@ -76,29 +76,25 @@
     <!-- FINANZAS -->
     <section id="finanzas" class="tab">
       <!-- Control de periodo -->
-<!-- Control de periodo -->
-<div class="card">
-  <div class="row" style="margin-top:8px">
-    <label style="flex:1">Ir a
-      <select id="goto-period"></select>
-    </label>
-    <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
-  </div>
-    <strong>Mes en curso:</strong>
-    <span id="curr-period" class="badge"></span>
-    <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
-    <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
-    <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
-  </div>
+      <div class="card">
+        <h3>Periodo</h3>
+        <div class="row">
+          <strong>Mes en curso:</strong>
+          <span id="curr-period" class="badge"></span>
+          <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
+          <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
+          <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
+        </div>
 
-  <div class="row" style="margin-top:8px">
-    <input id="goto-period" placeholder="Ir a YYYY-MM" />
-    <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
-  </div>
+        <div class="row" style="margin-top:8px">
+          <label>Ir a
+            <select id="goto-period"></select>
+          </label>
+          <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
+        </div>
 
-  <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
-</div>
-
+        <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
+      </div>
 
       <div class="grid-2">
         <!-- Nuevo gasto -->
@@ -174,7 +170,7 @@
   </main>
 
   <footer class="foot mono">
-    Modo demo con localStorage. Luego conectamos a Firebase.
+    Conectado a Firebase (Firestore).
   </footer>
 
   <script defer type="module" src="main.js"></script>
