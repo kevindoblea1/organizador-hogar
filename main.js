@@ -18,9 +18,7 @@ const systemMonth = () => new Date().toISOString().slice(0,7);
 const isYYYYMM = (s) => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 const nextMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`; };
 const previousMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-const ROLES = { esposa: 'Esposa', esposo: 'Esposo' };
 const DEFAULT_INCOME = { esposa: 18800, esposo: 27000 };
 
 /* =======================
@@ -42,49 +40,72 @@ const colIngresos     = collection(db, 'hogares', HOGAR_ID, 'ingresos'); // docI
 const colCerrados     = collection(db, 'hogares', HOGAR_ID, 'cerrados'); // docId = YYYY-MM {cerrado:true}
 
 /* =======================
-   DOM base / Login guard
+   LOGIN / LOGOUT (IDs del HTML)
 ======================= */
-const tabsNav  = document.getElementById('tabs');
-const appMain  = document.getElementById('app');
-const guard    = document.getElementById('auth-guard');
-const emailI   = document.getElementById('auth-email');
-const passI    = document.getElementById('auth-pass');
-const btnAuth  = document.getElementById('btn-auth-login');
+const authGuard    = document.getElementById("auth-guard");
+const authEmail    = document.getElementById("auth-email");
+const authPass     = document.getElementById("auth-pass");
+const btnAuthLogin = document.getElementById("btn-auth-login");
 
-/* Mostrar/ocultar app según sesión */
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    // Mostrar app
-    tabsNav.style.display = '';
-    appMain.style.display = '';
-    guard.style.display = 'none';
-    // Cargar datos
-    await onPeriodChange();
-    await renderTareas();
-  } else {
-    // Ocultar app y pedir login
-    tabsNav.style.display = 'none';
-    appMain.style.display = 'none';
-    guard.style.display = '';
+// Opcional (si los tienes en el header)
+const userPill    = document.getElementById("user-pill");
+const userEmailEl = document.getElementById("user-email");
+const btnLogout   = document.getElementById("btn-logout");
+
+// Mostrar/ocultar secciones protegidas
+function setProtectedVisible(show) {
+  document.querySelectorAll("[data-guarded]").forEach(el => {
+    el.classList.toggle("hidden", !show);
+  });
+  authGuard?.classList.toggle("hidden", show);
+  userPill?.classList.toggle("hidden", !show);
+}
+
+// Mensajes de error de Auth
+function authMessage(code) {
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/invalid-email":
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+      return "Correo o contraseña inválidos.";
+    case "auth/too-many-requests":
+      return "Demasiados intentos. Intenta más tarde.";
+    default:
+      return "No se pudo iniciar sesión.";
   }
-});
+}
 
-/* Login */
-btnAuth?.addEventListener('click', async () => {
-  const email = (emailI.value || '').trim();
-  const pass  = passI.value || '';
-  if (!email || !pass) { alert('Completa email y contraseña.'); return; }
+// Click en "Entrar"
+btnAuthLogin?.addEventListener("click", async () => {
   try {
+    const email = authEmail?.value?.trim() || "";
+    const pass  = authPass?.value || "";
     await signInWithEmailAndPassword(auth, email, pass);
-    // onAuthStateChanged hará el resto
+    // onAuthStateChanged pinta el resto
   } catch (err) {
     console.error(err);
-    alert('No se pudo iniciar sesión: ' + (err?.message || err));
+    alert(authMessage(err?.code));
   }
 });
 
+// Enter en los inputs de login
+[authEmail, authPass].forEach(inp => {
+  inp?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") btnAuthLogin?.click();
+  });
+});
+
+// Logout si existe el botón
+btnLogout?.addEventListener("click", async () => {
+  try { await signOut(auth); } catch(e){ console.error(e); }
+});
+
+// Arrancar oculto
+setProtectedVisible(false);
+
 /* =======================
-   Datos: Ingresos / Cerrado
+   Datos: Ingresos / Cerrados
 ======================= */
 async function getIncomes(period) {
   const snap = await getDoc(doc(colIngresos, period));
@@ -112,8 +133,8 @@ async function unmarkClosed(period) {
 ======================= */
 async function addTarea(t) { await addDoc(colTareas, t); }
 async function listTareas() {
-  const q = query(colTareas, orderBy('creado_en','desc'));
-  const s = await getDocs(q);
+  const qy = query(colTareas, orderBy('creado_en','desc'));
+  const s = await getDocs(qy);
   return s.docs.map(d => ({ id:d.id, ...d.data() }));
 }
 async function updateTarea(id, patch) { await updateDoc(doc(colTareas, id), patch); }
@@ -124,8 +145,8 @@ async function deleteTarea(id) { await deleteDoc(doc(colTareas, id)); }
 ======================= */
 async function addGasto(g) { await addDoc(colGastos, g); }
 async function listGastos(limitTo=60) {
-  const q = query(colGastos, orderBy('creado_en','desc'), limit(limitTo));
-  const s = await getDocs(q);
+  const qy = query(colGastos, orderBy('creado_en','desc'), limit(limitTo));
+  const s = await getDocs(qy);
   return s.docs.map(d => ({ id:d.id, ...d.data() }));
 }
 async function deleteG(id) { await deleteDoc(doc(colGastos, id)); }
@@ -134,19 +155,19 @@ async function deleteG(id) { await deleteDoc(doc(colGastos, id)); }
    Datos: Presupuestos
 ======================= */
 async function upsertPresupuesto(periodo, categoria, tope) {
-  const q = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
-  const s = await getDocs(q);
+  const qy = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
+  const s = await getDocs(qy);
   if (s.empty) { await addDoc(colPresupuestos, { periodo, categoria, tope:+tope||0 }); }
   else { await updateDoc(doc(colPresupuestos, s.docs[0].id), { tope:+tope||0 }); }
 }
 async function listPresupuestos(periodo) {
-  const q = query(colPresupuestos, where('periodo','==',periodo));
-  const s = await getDocs(q);
+  const qy = query(colPresupuestos, where('periodo','==',periodo));
+  const s = await getDocs(qy);
   return s.docs.map(d => ({ id:d.id, ...d.data() }));
 }
 async function deletePresupuesto(periodo, categoria) {
-  const q = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
-  const s = await getDocs(q);
+  const qy = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
+  const s = await getDocs(qy);
   await Promise.all(s.docs.map(d => deleteDoc(doc(colPresupuestos, d.id))));
 }
 
@@ -155,22 +176,18 @@ async function deletePresupuesto(periodo, categoria) {
 ======================= */
 async function knownPeriods() {
   const set = new Set([CURRENT_PERIOD]);
-  const [ing, pre] = await Promise.all([
-    getDocs(colIngresos),
-    getDocs(colPresupuestos),
-  ]);
+  const [ing, pre] = await Promise.all([ getDocs(colIngresos), getDocs(colPresupuestos) ]);
   ing.docs.forEach(d => set.add(d.id));
   pre.docs.forEach(d => d.data().periodo && set.add(d.data().periodo));
   return Array.from(set).sort();
 }
-function monthsAround(center, back=3, forward=3) {
+function monthsAround(center, back=3, fwd=3) {
   const [y,m] = center.split('-').map(Number);
   const base = new Date(y, m-1, 1);
   const out = [];
-  for (let i=-back; i<=forward; i++) {
+  for (let i=-back; i<=fwd; i++) {
     const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
-    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    out.push(k);
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
   return Array.from(new Set(out));
 }
@@ -180,11 +197,11 @@ function monthsAround(center, back=3, forward=3) {
 ======================= */
 const tabs = document.querySelectorAll('.tabs button');
 const sections = document.querySelectorAll('.tab');
-tabs.forEach(btn => btn.addEventListener('click', () => {
+tabs.forEach(btn => btn?.addEventListener('click', () => {
   tabs.forEach(b => b.classList.remove('active'));
   sections.forEach(s => s.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById(btn.dataset.tab).classList.add('active');
+  document.getElementById(btn.dataset.tab)?.classList.add('active');
 }));
 
 /* ---------- TAREAS UI ---------- */
@@ -194,7 +211,7 @@ const tFiltroPersona = document.getElementById('t-filtro-persona');
 const tFiltroEstado = document.getElementById('t-filtro-estado');
 const tMetricas = document.getElementById('t-metricas');
 
-formT.addEventListener('submit', async (e) => {
+formT?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const tarea = {
     titulo: document.getElementById('t-titulo').value.trim(),
@@ -211,13 +228,14 @@ formT.addEventListener('submit', async (e) => {
   formT.reset(); await renderTareas();
 });
 
-tFiltroPersona.addEventListener('change', renderTareas);
-tFiltroEstado.addEventListener('change', renderTareas);
+tFiltroPersona?.addEventListener('change', renderTareas);
+tFiltroEstado?.addEventListener('change', renderTareas);
 
 async function renderTareas() {
-  const persona = tFiltroPersona.value; // todas | esposa | esposo
-  const estado = tFiltroEstado.value;   // todas | pendiente | hecha
+  const persona = tFiltroPersona?.value || 'todas';
+  const estado = tFiltroEstado?.value || 'todas';
   const tareas = await listTareas();
+  if (!listaT) return;
   listaT.innerHTML = '';
 
   // métricas semanales (últimos 7 días)
@@ -226,9 +244,11 @@ async function renderTareas() {
   const sem = tareas.filter(t => now - new Date(t.creado_en).getTime() < semanaMs);
   const puntosHechos = { esposa: 0, esposo: 0 }, puntosPend = { esposa: 0, esposo: 0 };
   sem.forEach(t => { (t.estado === 'hecha' ? puntosHechos : puntosPend)[t.asignado] += t.esfuerzo; });
-  tMetricas.textContent =
+  if (tMetricas) {
+    tMetricas.textContent =
 `Hechos (7 días)  →  Esposa: ${puntosHechos.esposa} | Esposo: ${puntosHechos.esposo}
 Pendientes        →  Esposa: ${puntosPend.esposa}  | Esposo: ${puntosPend.esposo}`;
+  }
 
   tareas
     .filter(t => (persona === 'todas' || t.asignado === persona))
@@ -285,13 +305,10 @@ const btnReabrirMes = document.getElementById('btn-reabrir-mes');
 const monthSelect = document.getElementById('goto-period');
 const btnIrPeriodo = document.getElementById('btn-ir-periodo');
 
-/* Inicializaciones simples */
-document.getElementById('g-fecha').value = today();
-pPeriodo.value = CURRENT_PERIOD;
-rPeriodo.value = CURRENT_PERIOD;
+document.getElementById('g-fecha') && (document.getElementById('g-fecha').value = today());
 
 /* Formularios */
-formG.addEventListener('submit', async (e) => {
+formG?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const fecha = document.getElementById('g-fecha').value || today();
   const g = {
@@ -308,7 +325,7 @@ formG.addEventListener('submit', async (e) => {
   await renderAllFinance();
 });
 
-formP.addEventListener('submit', async (e) => {
+formP?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const periodo = (pPeriodo.value || CURRENT_PERIOD);
   const categoria = document.getElementById('p-categoria').value.trim();
@@ -320,7 +337,7 @@ formP.addEventListener('submit', async (e) => {
 });
 
 /* Ingresos */
-btnGuardarIngresos.addEventListener('click', async () => {
+btnGuardarIngresos?.addEventListener('click', async () => {
   const periodo = pPeriodo.value || CURRENT_PERIOD;
   await setIncomes(periodo, { esposa: ingEsposa.value, esposo: ingEsposo.value });
   await loadIncomeFields();
@@ -351,15 +368,15 @@ btnTraerAnterior?.addEventListener('click', async () => {
 });
 
 /* Resumen */
-rBtn.addEventListener('click', async (e) => { e.preventDefault(); await renderResumen(); });
+rBtn?.addEventListener('click', async (e) => { e.preventDefault(); await renderResumen(); });
 
 /* Mes en curso (cabecera) */
-btnIrMesActual.addEventListener('click', async () => {
+btnIrMesActual?.addEventListener('click', async () => {
   setCurrentPeriod(systemMonth());
   await onPeriodChange();
 });
 
-btnCerrarMes.addEventListener('click', async () => {
+btnCerrarMes?.addEventListener('click', async () => {
   const current = CURRENT_PERIOD;
   if (await isClosed(current)) { alert('Este mes ya está cerrado.'); return; }
 
@@ -377,7 +394,7 @@ btnCerrarMes.addEventListener('click', async () => {
 });
 
 /* Cambiar al mes seleccionado en el dropdown */
-btnIrPeriodo.addEventListener('click', async () => {
+btnIrPeriodo?.addEventListener('click', async () => {
   const target = monthSelect.value;
   if (!isYYYYMM(target)) { alert('Selecciona un mes válido.'); return; }
   setCurrentPeriod(target);
@@ -385,7 +402,7 @@ btnIrPeriodo.addEventListener('click', async () => {
 });
 
 /* Reabrir el mes actual */
-btnReabrirMes.addEventListener('click', async () => {
+btnReabrirMes?.addEventListener('click', async () => {
   const current = CURRENT_PERIOD;
   if (!(await isClosed(current))) { alert('Este mes no está cerrado.'); return; }
   await unmarkClosed(current);
@@ -398,6 +415,7 @@ async function renderAllFinance() { await renderGastos(); await renderPresupuest
 
 async function renderGastos() {
   const gastos = await listGastos();
+  if (!listaG) return;
   listaG.innerHTML = '';
   gastos.forEach(g => {
     const li = document.createElement('li'); li.className = 'item';
@@ -417,13 +435,14 @@ async function renderGastos() {
 }
 
 async function renderPresupuestos() {
-  const p = (rPeriodo.value || CURRENT_PERIOD);
+  const p = (rPeriodo?.value || CURRENT_PERIOD);
   const [gastos, presupuestos] = await Promise.all([
     listGastos(1000).then(arr => arr.filter(g => g.periodo === p)),
     listPresupuestos(p)
   ]);
 
   const porCat = gastos.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria] || 0) + g.monto; return acc; }, {});
+  if (!listaP) return;
   listaP.innerHTML = '';
   presupuestos.forEach(b => {
     const usado = porCat[b.categoria] || 0;
@@ -446,7 +465,7 @@ async function renderPresupuestos() {
 }
 
 async function renderResumen() {
-  const p = (rPeriodo.value || CURRENT_PERIOD);
+  const p = (rPeriodo?.value || CURRENT_PERIOD);
   const inc = await getIncomes(p);
   const sum = (+inc.esposa || 0) + (+inc.esposo || 0);
 
@@ -463,8 +482,9 @@ async function renderResumen() {
   };
   const balance = { esposa: pagado.esposa - cuotas.esposa, esposo: pagado.esposo - cuotas.esposo };
 
-  const cerrado = await isClosed(p);
-  rOut.textContent =
+  if (rOut) {
+    const cerrado = await isClosed(p);
+    rOut.textContent =
 `Periodo ${p}  ${cerrado ? '— [CERRADO]' : ''}
 Ingresos →  Esposa: ${L(inc.esposa)} | Esposo: ${L(inc.esposo)}  (proporciones: ${sum>0?(inc.esposa/sum*100).toFixed(1):50}% / ${sum>0?(inc.esposo/sum*100).toFixed(1):50}%)
 Total Gastos: ${L(total)}
@@ -472,29 +492,30 @@ Cuotas teóricas →  Esposa: ${L(cuotas.esposa)} | Esposo: ${L(cuotas.esposo)}
 Pagado           →  Esposa: ${L(pagado.esposa)} | Esposo: ${L(pagado.esposo)}
 Balance          →  Esposa: ${balance.esposa>=0?'a favor':'en contra'} ${L(Math.abs(balance.esposa))}
                     Esposo: ${balance.esposo>=0?'a favor':'en contra'} ${L(Math.abs(balance.esposo))}`;
+  }
 }
 
 async function loadIncomeFields() {
-  const period = pPeriodo.value || CURRENT_PERIOD;
+  const period = pPeriodo?.value || CURRENT_PERIOD;
   const inc = await getIncomes(period);
-  ingEsposa.value = inc.esposa;
-  ingEsposo.value = inc.esposo;
+  if (ingEsposa) ingEsposa.value = inc.esposa;
+  if (ingEsposo) ingEsposo.value = inc.esposo;
 
   const sum = (+inc.esposa||0) + (+inc.esposo||0);
   const pe = sum>0 ? (inc.esposa/sum*100).toFixed(1) : '50.0';
   const po = sum>0 ? (inc.esposo/sum*100).toFixed(1) : '50.0';
-  ingInfo.textContent = `Proporciones para ${period}: Esposa ${pe}% — Esposo ${po}%`;
+  if (ingInfo) ingInfo.textContent = `Proporciones para ${period}: Esposa ${pe}% — Esposo ${po}%`;
 }
 
 async function updatePeriodHeader() {
   const current = CURRENT_PERIOD;
-  currPeriodSpan.textContent = current;
+  if (currPeriodSpan) currPeriodSpan.textContent = current;
   const closed = await isClosed(current);
-  currEstado.textContent = closed
+  if (currEstado) currEstado.textContent = closed
     ? 'Estado: CERRADO (puedes reabrirlo si necesitas editarlo).'
     : 'Estado: ABIERTO';
-  btnReabrirMes.style.display = closed ? '' : 'none';
-  btnCerrarMes.style.display  = closed ? 'none' : '';
+  if (btnReabrirMes) btnReabrirMes.style.display = closed ? '' : 'none';
+  if (btnCerrarMes)  btnCerrarMes.style.display  = closed ? 'none' : '';
 }
 
 async function refreshMonthDropdown() {
@@ -502,6 +523,7 @@ async function refreshMonthDropdown() {
   if (options.length === 0) options = monthsAround(CURRENT_PERIOD, 4, 2);
   else options = Array.from(new Set([...options, ...monthsAround(CURRENT_PERIOD, 2, 2)])).sort();
 
+  if (!monthSelect) return;
   monthSelect.innerHTML = '';
   options.forEach(p => {
     const opt = document.createElement('option');
@@ -512,14 +534,33 @@ async function refreshMonthDropdown() {
 }
 
 async function onPeriodChange() {
-  pPeriodo.value = CURRENT_PERIOD; rPeriodo.value = CURRENT_PERIOD;
+  if (pPeriodo) pPeriodo.value = CURRENT_PERIOD;
+  if (rPeriodo) rPeriodo.value = CURRENT_PERIOD;
   await updatePeriodHeader();
   await loadIncomeFields();
   await renderAllFinance();
   await refreshMonthDropdown();
 }
 
-/* Al cargar (sin pintar datos hasta login) */
-document.getElementById('g-fecha').value = today();
-pPeriodo.value = CURRENT_PERIOD;
-rPeriodo.value = CURRENT_PERIOD;
+/* =======================
+   Sesión → pintar/ocultar
+======================= */
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    setProtectedVisible(true);
+    if (userEmailEl) userEmailEl.textContent = user.email || "Conectado";
+    // Inicializa valores visibles
+    if (pPeriodo) pPeriodo.value = CURRENT_PERIOD;
+    if (rPeriodo) rPeriodo.value = CURRENT_PERIOD;
+    try {
+      await renderTareas();
+      await onPeriodChange();
+    } catch (e) { console.error(e); }
+  } else {
+    setProtectedVisible(false);
+    if (userEmailEl) userEmailEl.textContent = "";
+  }
+});
+
+// Mensaje de pie (opcional)
+console.info("[firebase] conectado a", auth.app.options.projectId);
