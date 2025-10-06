@@ -4,102 +4,104 @@
 import {
   db, auth, HOGAR_ID,
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
-  collection, doc, getDoc, getDocs, query, where,
-  addDoc, updateDoc, deleteDoc, setDoc, orderBy, limit
+  collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc,
+  deleteDoc, setDoc, orderBy, limit
 } from "./firebase.js";
 
 /* =======================
-   Blindaje inicial de UI
+   Utils
 ======================= */
-const guarded = () => document.querySelectorAll('[data-guarded]');
-guarded().forEach(el => el.classList.add('hidden'));        // oculta todo lo sensible
-document.getElementById('user-pill')?.classList.add('hidden');
-document.getElementById('auth-guard')?.classList.remove('hidden'); // muestra login
-
-function applyGuardUI({ loggedIn, email }) {
-  const loginCard = document.getElementById('auth-guard');
-  const userPill  = document.getElementById('user-pill');
-  const userEmail = document.getElementById('user-email');
-
-  if (loggedIn) {
-    loginCard?.classList.add('hidden');
-    if (userEmail) userEmail.textContent = email || '';
-    userPill?.classList.remove('hidden');
-    guarded().forEach(el => el.classList.remove('hidden'));
-  } else {
-    userPill?.classList.add('hidden');
-    guarded().forEach(el => el.classList.add('hidden'));
-    loginCard?.classList.remove('hidden');
-  }
-}
-
-/* =======================
-   Utilidades
-======================= */
+const $ = (id) => document.getElementById(id);
 const L = (n) => 'L ' + Number(n || 0).toFixed(2);
 const today = () => new Date().toISOString().slice(0,10);
-const monthOf = (dateStr) => (dateStr || today()).slice(0,7); // YYYY-MM
+const monthOf = (dateStr) => (dateStr || today()).slice(0,7);
 const systemMonth = () => new Date().toISOString().slice(0,7);
 const isYYYYMM = (s) => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 const nextMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`; };
 const previousMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
 
-const ROLES = { esposa: 'Esposa', esposo: 'Esposo' };
 const DEFAULT_INCOME = { esposa: 18800, esposo: 27000 };
 
 /* =======================
    Estado Periodo
 ======================= */
 let CURRENT_PERIOD = localStorage.getItem("hogar_periodo_actual") || systemMonth();
-function setCurrentPeriod(p) { CURRENT_PERIOD = p; localStorage.setItem("hogar_periodo_actual", p); }
+function setCurrentPeriod(p) {
+  CURRENT_PERIOD = p;
+  localStorage.setItem("hogar_periodo_actual", p);
+}
 
 /* =======================
-   Firestore refs
+   Refs Firestore
 ======================= */
 const colTareas       = collection(db, 'hogares', HOGAR_ID, 'tareas');
 const colGastos       = collection(db, 'hogares', HOGAR_ID, 'gastos');
 const colPresupuestos = collection(db, 'hogares', HOGAR_ID, 'presupuestos');
-const colIngresos     = collection(db, 'hogares', HOGAR_ID, 'ingresos'); // docId = YYYY-MM
-const colCerrados     = collection(db, 'hogares', HOGAR_ID, 'cerrados'); // docId = YYYY-MM {cerrado:true}
+const colIngresos     = collection(db, 'hogares', HOGAR_ID, 'ingresos');   // docId = YYYY-MM
+const colCerrados     = collection(db, 'hogares', HOGAR_ID, 'cerrados');   // docId = YYYY-MM {cerrado:true}
 
 /* =======================
-   Seguridad: membresía
+   Guard UI (login vs app)
 ======================= */
-async function isMember(uid) {
-  const d = await getDoc(doc(db, 'hogares', HOGAR_ID, 'miembros', uid));
-  return d.exists();
-}
+const guard = {
+  loginCard:   $('auth-guard'),
+  appPrivate:  $('app-private'),
+  sessionLbl:  $('session-state'),
+  btnLogout:   $('btn-logout'),
+  showApp(authenticated) {
+    if (authenticated) {
+      this.loginCard.style.display = 'none';
+      this.appPrivate.style.display = '';
+      this.btnLogout.disabled = false;
+    } else {
+      this.loginCard.style.display = '';
+      this.appPrivate.style.display = 'none';
+      this.btnLogout.disabled = true;
+    }
+  },
+  setSessionText(t) { this.sessionLbl.textContent = t; }
+};
 
 /* =======================
-   Auth
+   Auth listeners
 ======================= */
-document.getElementById('btn-auth-login')?.addEventListener('click', async () => {
-  const email = document.getElementById('auth-email').value.trim();
-  const pass  = document.getElementById('auth-pass').value;
-  if (!email || !pass) return alert('Completa correo y contraseña.');
+$('btn-auth-login')?.addEventListener('click', async () => {
+  const email = $('auth-email')?.value?.trim();
+  const pass  = $('auth-pass')?.value || '';
+  if (!email || !pass) { alert('Ingresa correo y contraseña'); return; }
   try {
     await signInWithEmailAndPassword(auth, email, pass);
   } catch (e) {
-    console.error(e); alert('Login inválido.');
+    console.error(e);
+    alert('No se pudo iniciar sesión. Revisa correo/contraseña y reglas de Firestore.');
   }
 });
 
-document.getElementById('btn-logout')?.addEventListener('click', async () => {
-  await signOut(auth);
-  applyGuardUI({ loggedIn: false });
-});
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) { applyGuardUI({ loggedIn: false }); return; }
-  const ok = await isMember(user.uid);
-  if (!ok) { console.warn('No miembro del hogar.'); applyGuardUI({ loggedIn: false }); return; }
-  applyGuardUI({ loggedIn: true, email: user.email || 'Sesión activa' });
-  await onPeriodChange();
-  await renderTareas();
+$('btn-logout')?.addEventListener('click', async () => {
+  try { await signOut(auth); } catch(e) { console.error(e); }
 });
 
 /* =======================
-   Datos: Ingresos / Cerrado
+   onAuthStateChanged
+======================= */
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    guard.setSessionText('Activa');
+    guard.showApp(true);
+    // Carga inicial de datos
+    try {
+      await onPeriodChange();
+    } catch(e) {
+      console.error('Inicialización post-login', e);
+    }
+  } else {
+    guard.setSessionText('No iniciada');
+    guard.showApp(false);
+  }
+});
+
+/* =======================
+   Ingresos / Cerrados
 ======================= */
 async function getIncomes(period) {
   const snap = await getDoc(doc(colIngresos, period));
@@ -112,12 +114,18 @@ async function getIncomes(period) {
 async function setIncomes(period, data) {
   await setDoc(doc(colIngresos, period), { esposa:+data.esposa||0, esposo:+data.esposo||0 }, { merge: true });
 }
-async function isClosed(period) { const s = await getDoc(doc(colCerrados, period)); return s.exists(); }
-async function markClosed(period) { await setDoc(doc(colCerrados, period), { cerrado: true }); }
-async function unmarkClosed(period) { await deleteDoc(doc(colCerrados, period)).catch(()=>{}); }
+async function isClosed(period) {
+  const s = await getDoc(doc(colCerrados, period)); return s.exists();
+}
+async function markClosed(period) {
+  await setDoc(doc(colCerrados, period), { cerrado: true });
+}
+async function unmarkClosed(period) {
+  await deleteDoc(doc(colCerrados, period)).catch(()=>{});
+}
 
 /* =======================
-   Datos: Tareas
+   Tareas
 ======================= */
 async function addTarea(t) { await addDoc(colTareas, t); }
 async function listTareas() {
@@ -129,7 +137,7 @@ async function updateTarea(id, patch) { await updateDoc(doc(colTareas, id), patc
 async function deleteTarea(id) { await deleteDoc(doc(colTareas, id)); }
 
 /* =======================
-   Datos: Gastos
+   Gastos
 ======================= */
 async function addGasto(g) { await addDoc(colGastos, g); }
 async function listGastos(limitTo=60) {
@@ -140,7 +148,7 @@ async function listGastos(limitTo=60) {
 async function deleteG(id) { await deleteDoc(doc(colGastos, id)); }
 
 /* =======================
-   Datos: Presupuestos
+   Presupuestos
 ======================= */
 async function upsertPresupuesto(periodo, categoria, tope) {
   const q = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
@@ -194,21 +202,21 @@ tabs.forEach(btn => btn.addEventListener('click', () => {
 }));
 
 /* ---------- TAREAS UI ---------- */
-const formT = document.getElementById('form-tarea');
-const listaT = document.getElementById('lista-tareas');
-const tFiltroPersona = document.getElementById('t-filtro-persona');
-const tFiltroEstado = document.getElementById('t-filtro-estado');
-const tMetricas = document.getElementById('t-metricas');
+const formT = $('form-tarea');
+const listaT = $('lista-tareas');
+const tFiltroPersona = $('t-filtro-persona');
+const tFiltroEstado = $('t-filtro-estado');
+const tMetricas = $('t-metricas');
 
 formT?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const tarea = {
-    titulo: document.getElementById('t-titulo').value.trim(),
-    descripcion: document.getElementById('t-desc').value.trim(),
-    esfuerzo: +document.getElementById('t-esfuerzo').value,
-    asignado: document.getElementById('t-asignado').value,
+    titulo: $('t-titulo').value.trim(),
+    descripcion: $('t-desc').value.trim(),
+    esfuerzo: +$('t-esfuerzo').value,
+    asignado: $('t-asignado').value,
     estado: 'pendiente',
-    fecha_limite: document.getElementById('t-fecha').value || null,
+    fecha_limite: $('t-fecha').value || null,
     creado_en: new Date().toISOString(),
     hecho_en: null,
   };
@@ -221,21 +229,22 @@ tFiltroPersona?.addEventListener('change', renderTareas);
 tFiltroEstado?.addEventListener('change', renderTareas);
 
 async function renderTareas() {
-  if (document.getElementById('tareas')?.classList.contains('hidden')) return;
-  const persona = tFiltroPersona.value; // todas | esposa | esposo
-  const estado = tFiltroEstado.value;   // todas | pendiente | hecha
+  const persona = tFiltroPersona?.value || 'todas';
+  const estado  = tFiltroEstado?.value || 'todas';
   const tareas = await listTareas();
+  if (!listaT) return;
   listaT.innerHTML = '';
 
-  // métricas semanales (últimos 7 días)
   const semanaMs = 7 * 24 * 3600 * 1000;
   const now = Date.now();
   const sem = tareas.filter(t => now - new Date(t.creado_en).getTime() < semanaMs);
   const puntosHechos = { esposa: 0, esposo: 0 }, puntosPend = { esposa: 0, esposo: 0 };
   sem.forEach(t => { (t.estado === 'hecha' ? puntosHechos : puntosPend)[t.asignado] += t.esfuerzo; });
-  tMetricas.textContent =
+  if (tMetricas) {
+    tMetricas.textContent =
 `Hechos (7 días)  →  Esposa: ${puntosHechos.esposa} | Esposo: ${puntosHechos.esposo}
 Pendientes        →  Esposa: ${puntosPend.esposa}  | Esposo: ${puntosPend.esposo}`;
+  }
 
   tareas
     .filter(t => (persona === 'todas' || t.asignado === persona))
@@ -254,80 +263,78 @@ Pendientes        →  Esposa: ${puntosPend.esposa}  | Esposo: ${puntosPend.espo
           <button class="btn btn-warn" data-reasign>Reasignar</button>
           <button class="btn btn-danger" data-del>Eliminar</button>
         </div>`;
-      li.querySelector('[data-done]').onclick = async () => {
+      li.querySelector('[data-done]')?.addEventListener('click', async () => {
         await updateTarea(t.id, { estado: 'hecha', hecho_en: new Date().toISOString() }); renderTareas();
-      };
-      li.querySelector('[data-reasign]').onclick = async () => {
+      });
+      li.querySelector('[data-reasign]')?.addEventListener('click', async () => {
         const nuevo = t.asignado === 'esposo' ? 'esposa' : 'esposo';
         await updateTarea(t.id, { asignado: nuevo }); renderTareas();
-      };
-      li.querySelector('[data-del]').onclick = async () => {
+      });
+      li.querySelector('[data-del]')?.addEventListener('click', async () => {
         await deleteTarea(t.id); renderTareas();
-      };
+      });
       listaT.appendChild(li);
     });
 }
 
 /* ---------- FINANZAS UI ---------- */
-const formG = document.getElementById('form-gasto');
-const listaG = document.getElementById('lista-gastos');
-const formP = document.getElementById('form-presupuesto');
-const listaP = document.getElementById('lista-presupuestos');
-const rPeriodo = document.getElementById('r-periodo');
-const rBtn = document.getElementById('r-cargar');
-const rOut = document.getElementById('r-out');
+const formG = $('form-gasto');
+const listaG = $('lista-gastos');
+const formP = $('form-presupuesto');
+const listaP = $('lista-presupuestos');
+const rPeriodo = $('r-periodo');
+const rBtn = $('r-cargar');
+const rOut = $('r-out');
 
-const pPeriodo = document.getElementById('p-periodo');
-const ingEsposa = document.getElementById('ing-esposa');
-const ingEsposo = document.getElementById('ing-esposo');
-const ingInfo = document.getElementById('ing-info');
-const btnGuardarIngresos = document.getElementById('btn-guardar-ingresos');
-const btnTraerAnterior = document.getElementById('btn-traer-anterior');
+const pPeriodo = $('p-periodo');
+const ingEsposa = $('ing-esposa');
+const ingEsposo = $('ing-esposo');
+const ingInfo = $('ing-info');
+const btnGuardarIngresos = $('btn-guardar-ingresos');
+const btnTraerAnterior = $('btn-traer-anterior');
 
-const currPeriodSpan = document.getElementById('curr-period');
-const currEstado = document.getElementById('curr-estado');
-const btnIrMesActual = document.getElementById('btn-ir-mes-actual');
-const btnCerrarMes = document.getElementById('btn-cerrar-mes');
-const btnReabrirMes = document.getElementById('btn-reabrir-mes');
-const monthSelect = document.getElementById('goto-period');
-const btnIrPeriodo = document.getElementById('btn-ir-periodo');
+const currPeriodSpan = $('curr-period');
+const currEstado = $('curr-estado');
+const btnIrMesActual = $('btn-ir-mes-actual');
+const btnCerrarMes = $('btn-cerrar-mes');
+const btnReabrirMes = $('btn-reabrir-mes');
+const monthSelect = $('goto-period');
+const btnIrPeriodo = $('btn-ir-periodo');
 
-document.getElementById('g-fecha') && (document.getElementById('g-fecha').value = today());
+$('g-fecha') && ($('g-fecha').value = today());
 
-/* Inicio de campos de periodo cuando la UI ya está disponible */
 pPeriodo && (pPeriodo.value = CURRENT_PERIOD);
 rPeriodo && (rPeriodo.value = CURRENT_PERIOD);
 
 /* Formularios */
 formG?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const fecha = document.getElementById('g-fecha').value || today();
+  const fecha = $('g-fecha').value || today();
   const g = {
     fecha, periodo: monthOf(fecha),
-    categoria: document.getElementById('g-categoria').value.trim(),
-    descripcion: document.getElementById('g-desc').value.trim(),
-    monto: +document.getElementById('g-monto').value,
-    pagado_por: document.getElementById('g-pagado').value,
+    categoria: $('g-categoria').value.trim(),
+    descripcion: $('g-desc').value.trim(),
+    monto: +$('g-monto').value,
+    pagado_por: $('g-pagado').value,
     creado_en: new Date().toISOString()
   };
   if (!g.categoria || !g.monto) return;
   await addGasto(g);
-  formG.reset(); document.getElementById('g-fecha').value = today();
+  formG.reset(); $('g-fecha').value = today();
   await renderAllFinance();
 });
 
 formP?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const periodo = (pPeriodo.value || CURRENT_PERIOD);
-  const categoria = document.getElementById('p-categoria').value.trim();
-  const tope = +document.getElementById('p-tope').value;
+  const categoria = $('p-categoria').value.trim();
+  const tope = +$('p-tope').value;
   if (!periodo || !categoria) return;
   await upsertPresupuesto(periodo, categoria, tope);
   formP.reset(); pPeriodo.value = CURRENT_PERIOD;
   await renderAllFinance();
 });
 
-/* Ingresos */
 btnGuardarIngresos?.addEventListener('click', async () => {
   const periodo = pPeriodo.value || CURRENT_PERIOD;
   await setIncomes(periodo, { esposa: ingEsposa.value, esposo: ingEsposo.value });
@@ -335,11 +342,9 @@ btnGuardarIngresos?.addEventListener('click', async () => {
   await renderAllFinance();
 });
 
-/* Traer del mes anterior */
 btnTraerAnterior?.addEventListener('click', async () => {
   const target = pPeriodo.value || CURRENT_PERIOD;
   const prev = previousMonth(target);
-
   const prevInc = await getIncomes(prev);
   await setIncomes(target, prevInc);
 
@@ -356,10 +361,8 @@ btnTraerAnterior?.addEventListener('click', async () => {
   alert(`Importado desde ${prev}: ingresos + ${added} presupuesto(s).`);
 });
 
-/* Resumen */
 rBtn?.addEventListener('click', async (e) => { e.preventDefault(); await renderResumen(); });
 
-/* Mes en curso (cabecera) */
 btnIrMesActual?.addEventListener('click', async () => {
   setCurrentPeriod(systemMonth());
   await onPeriodChange();
@@ -368,7 +371,6 @@ btnIrMesActual?.addEventListener('click', async () => {
 btnCerrarMes?.addEventListener('click', async () => {
   const current = CURRENT_PERIOD;
   if (await isClosed(current)) { alert('Este mes ya está cerrado.'); return; }
-
   await markClosed(current);
 
   const next = nextMonth(current);
@@ -381,7 +383,6 @@ btnCerrarMes?.addEventListener('click', async () => {
   alert(`Mes ${current} cerrado. Nuevo mes en curso: ${next}.`);
 });
 
-/* Cambiar al mes seleccionado en el dropdown */
 btnIrPeriodo?.addEventListener('click', async () => {
   const target = monthSelect.value;
   if (!isYYYYMM(target)) { alert('Selecciona un mes válido.'); return; }
@@ -389,7 +390,6 @@ btnIrPeriodo?.addEventListener('click', async () => {
   await onPeriodChange();
 });
 
-/* Reabrir el mes actual */
 btnReabrirMes?.addEventListener('click', async () => {
   const current = CURRENT_PERIOD;
   if (!(await isClosed(current))) { alert('Este mes no está cerrado.'); return; }
@@ -402,8 +402,8 @@ btnReabrirMes?.addEventListener('click', async () => {
 async function renderAllFinance() { await renderGastos(); await renderPresupuestos(); await renderResumen(); }
 
 async function renderGastos() {
-  if (document.getElementById('finanzas')?.classList.contains('hidden')) return;
   const gastos = await listGastos();
+  if (!listaG) return;
   listaG.innerHTML = '';
   gastos.forEach(g => {
     const li = document.createElement('li'); li.className = 'item';
@@ -415,22 +415,22 @@ async function renderGastos() {
       <div class="actions">
         <button class="btn btn-danger" data-del>Eliminar</button>
       </div>`;
-    li.querySelector('[data-del]').onclick = async () => {
+    li.querySelector('[data-del]')?.addEventListener('click', async () => {
       await deleteG(g.id); await renderAllFinance();
-    };
+    });
     listaG.appendChild(li);
   });
 }
 
 async function renderPresupuestos() {
-  if (document.getElementById('finanzas')?.classList.contains('hidden')) return;
-  const p = (rPeriodo.value || CURRENT_PERIOD);
+  const p = (rPeriodo?.value || CURRENT_PERIOD);
   const [gastos, presupuestos] = await Promise.all([
     listGastos(1000).then(arr => arr.filter(g => g.periodo === p)),
     listPresupuestos(p)
   ]);
 
   const porCat = gastos.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria] || 0) + g.monto; return acc; }, {});
+  if (!listaP) return;
   listaP.innerHTML = '';
   presupuestos.forEach(b => {
     const usado = porCat[b.categoria] || 0;
@@ -444,17 +444,16 @@ async function renderPresupuestos() {
       <div class="actions">
         <button class="btn btn-danger" data-del>Quitar</button>
       </div>`;
-    li.querySelector('[data-del]').onclick = async () => {
+    li.querySelector('[data-del]')?.addEventListener('click', async () => {
       await deletePresupuesto(b.periodo, b.categoria);
       await renderPresupuestos();
-    };
+    });
     listaP.appendChild(li);
   });
 }
 
 async function renderResumen() {
-  if (document.getElementById('finanzas')?.classList.contains('hidden')) return;
-  const p = (rPeriodo.value || CURRENT_PERIOD);
+  const p = (rPeriodo?.value || CURRENT_PERIOD);
   const inc = await getIncomes(p);
   const sum = (+inc.esposa || 0) + (+inc.esposo || 0);
 
@@ -471,6 +470,7 @@ async function renderResumen() {
   };
   const balance = { esposa: pagado.esposa - cuotas.esposa, esposo: pagado.esposo - cuotas.esposo };
 
+  if (!rOut) return;
   const cerrado = await isClosed(p);
   rOut.textContent =
 `Periodo ${p}  ${cerrado ? '— [CERRADO]' : ''}
@@ -483,26 +483,26 @@ Balance          →  Esposa: ${balance.esposa>=0?'a favor':'en contra'} ${L(Mat
 }
 
 async function loadIncomeFields() {
-  const period = pPeriodo.value || CURRENT_PERIOD;
+  const period = pPeriodo?.value || CURRENT_PERIOD;
   const inc = await getIncomes(period);
-  ingEsposa.value = inc.esposa;
-  ingEsposo.value = inc.esposo;
+  if (ingEsposa) ingEsposa.value = inc.esposa;
+  if (ingEsposo) ingEsposo.value = inc.esposo;
 
   const sum = (+inc.esposa||0) + (+inc.esposo||0);
   const pe = sum>0 ? (inc.esposa/sum*100).toFixed(1) : '50.0';
   const po = sum>0 ? (inc.esposo/sum*100).toFixed(1) : '50.0';
-  ingInfo.textContent = `Proporciones para ${period}: Esposa ${pe}% — Esposo ${po}%`;
+  if (ingInfo) ingInfo.textContent = `Proporciones para ${period}: Esposa ${pe}% — Esposo ${po}%`;
 }
 
 async function updatePeriodHeader() {
   const current = CURRENT_PERIOD;
-  currPeriodSpan.textContent = current;
+  if (currPeriodSpan) currPeriodSpan.textContent = current;
   const closed = await isClosed(current);
-  currEstado.textContent = closed
+  if (currEstado) currEstado.textContent = closed
     ? 'Estado: CERRADO (puedes reabrirlo si necesitas editarlo).'
     : 'Estado: ABIERTO';
-  btnReabrirMes.style.display = closed ? '' : 'none';
-  btnCerrarMes.style.display  = closed ? 'none' : '';
+  if (btnReabrirMes) btnReabrirMes.style.display = closed ? '' : 'none';
+  if (btnCerrarMes)  btnCerrarMes.style.display  = closed ? 'none' : '';
 }
 
 async function refreshMonthDropdown() {
@@ -510,6 +510,7 @@ async function refreshMonthDropdown() {
   if (options.length === 0) options = monthsAround(CURRENT_PERIOD, 4, 2);
   else options = Array.from(new Set([...options, ...monthsAround(CURRENT_PERIOD, 2, 2)])).sort();
 
+  if (!monthSelect) return;
   monthSelect.innerHTML = '';
   options.forEach(p => {
     const opt = document.createElement('option');
@@ -519,14 +520,11 @@ async function refreshMonthDropdown() {
   });
 }
 
-async function onPeriodChange() {
-  pPeriodo && (pPeriodo.value = CURRENT_PERIOD);
-  rPeriodo && (rPeriodo.value = CURRENT_PERIOD);
+export async function onPeriodChange() {
+  if (pPeriodo) pPeriodo.value = CURRENT_PERIOD;
+  if (rPeriodo) rPeriodo.value = CURRENT_PERIOD;
   await updatePeriodHeader();
   await loadIncomeFields();
   await renderAllFinance();
   await refreshMonthDropdown();
 }
-
-/* Inicial */
-await onPeriodChange().catch(()=>{ /* se completará tras login */ });

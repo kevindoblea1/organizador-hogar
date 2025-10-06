@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hogar — Tareas & Finanzas</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Evita FOUC de contenido privado -->
   <style>
-    .hidden{ display:none !important; visibility:hidden !important; }
+    #app-private { display:none }
   </style>
 </head>
 <body>
@@ -24,13 +25,13 @@
     </nav>
 
     <div class="row">
-      <span id="user-pill" class="mono badge hidden">Sesión: <span id="user-email"></span></span>
-      <button id="btn-logout" class="btn btn-warn">Cerrar sesión</button>
+      <span class="badge">Sesión: <strong id="session-state">No iniciada</strong></span>
+      <button id="btn-logout" class="btn btn-warn" disabled>Cerrar sesión</button>
     </div>
   </header>
 
   <main>
-    <!-- LOGIN: visible por defecto -->
+    <!-- LOGIN (público) -->
     <section id="auth-guard" class="card">
       <h3>Iniciar sesión</h3>
       <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
@@ -43,151 +44,146 @@
       </div>
     </section>
 
-    <!-- TAREAS (protegido) -->
-    <section id="tareas" class="tab active hidden" data-guarded>
-      <div class="grid-2">
-        <form id="form-tarea" class="card">
-          <h3>Nueva tarea</h3>
-          <input id="t-titulo" placeholder="Título" required />
-          <input id="t-desc" placeholder="Descripción (opcional)" />
-          <label>Esfuerzo
-            <select id="t-esfuerzo">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3" selected>3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-            </select>
-          </label>
-          <label>Asignar a
-            <select id="t-asignado">
-              <option value="esposa">Esposa</option>
-              <option value="esposo" selected>Esposo</option>
-            </select>
-          </label>
-          <label>Fecha límite
-            <input id="t-fecha" type="date" />
-          </label>
-          <button>Agregar</button>
-        </form>
+    <!-- APP PRIVADA (oculta si no hay sesión) -->
+    <div id="app-private">
+      <!-- ============ TAREAS ============ -->
+      <section id="tareas" class="tab active">
+        <div class="grid-2">
+          <form id="form-tarea" class="card">
+            <h3>Nueva tarea</h3>
+            <input id="t-titulo" placeholder="Título" required />
+            <input id="t-desc" placeholder="Descripción (opcional)" />
+            <label>Esfuerzo
+              <select id="t-esfuerzo">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <label>Asignar a
+              <select id="t-asignado">
+                <option value="esposa">Esposa</option>
+                <option value="esposo" selected>Esposo</option>
+              </select>
+            </label>
+            <label>Fecha límite
+              <input id="t-fecha" type="date" />
+            </label>
+            <button>Agregar</button>
+          </form>
+
+          <div class="card">
+            <h3>Carga semanal (puntos)</h3>
+            <div id="t-metricas" class="mono"></div>
+          </div>
+        </div>
 
         <div class="card">
-          <h3>Carga semanal (puntos)</h3>
-          <div id="t-metricas" class="mono"></div>
+          <h3>Lista de tareas</h3>
+          <div class="filters">
+            <select id="t-filtro-persona">
+              <option value="todas">Todas</option>
+              <option value="esposa">Esposa</option>
+              <option value="esposo">Esposo</option>
+            </select>
+            <select id="t-filtro-estado">
+              <option value="todas">Todas</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="hecha">Hechas</option>
+            </select>
+          </div>
+          <ul id="lista-tareas" class="list"></ul>
         </div>
-      </div>
+      </section>
 
-      <div class="card">
-        <h3>Lista de tareas</h3>
-        <div class="filters">
-          <select id="t-filtro-persona">
-            <option value="todas">Todas</option>
-            <option value="esposa">Esposa</option>
-            <option value="esposo">Esposo</option>
-          </select>
-          <select id="t-filtro-estado">
-            <option value="todas">Todas</option>
-            <option value="pendiente">Pendientes</option>
-            <option value="hecha">Hechas</option>
-          </select>
-        </div>
-        <ul id="lista-tareas" class="list"></ul>
-      </div>
-    </section>
-
-    <!-- FINANZAS (protegido) -->
-    <section id="finanzas" class="tab hidden" data-guarded>
-      <!-- Control de periodo -->
-      <div class="card">
-        <div class="row" style="margin-top:8px">
+      <!-- ============ FINANZAS ============ -->
+      <section id="finanzas" class="tab">
+        <div class="card">
+          <div class="row" style="margin-top:8px">
+            <label style="flex:1">Ir a
+              <select id="goto-period"></select>
+            </label>
+            <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
+          </div>
           <strong>Mes en curso:</strong>
           <span id="curr-period" class="badge"></span>
           <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
           <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
           <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
+
+          <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
         </div>
 
-        <div class="row" style="margin-top:8px">
-          <label style="flex:1">Ir a
-            <select id="goto-period"></select>
-          </label>
-          <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
-        </div>
-
-        <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
-      </div>
-
-      <div class="grid-2">
-        <!-- Nuevo gasto -->
-        <form id="form-gasto" class="card">
-          <h3>Nuevo gasto</h3>
-          <label>Fecha <input id="g-fecha" type="date" required /></label>
-          <input id="g-categoria" placeholder="Categoría (ej. Luz, Super)" required />
-          <input id="g-desc" placeholder="Descripción (opcional)" />
-          <label>Monto (L) <input id="g-monto" type="number" min="0" step="0.01" required /></label>
-          <label>Pagó
-            <select id="g-pagado">
-              <option value="esposa">Esposa</option>
-              <option value="esposo" selected>Esposo</option>
-            </select>
-          </label>
-          <button>Guardar</button>
-        </form>
-
-        <!-- Presupuesto + Ingresos -->
-        <div class="card">
-          <h3>Presupuesto por categoría (periodo actual)</h3>
-          <form id="form-presupuesto">
-            <input id="p-periodo" placeholder="Periodo YYYY-MM" readonly
-                   title="Se usa el mes en curso; cambia el mes arriba si lo necesitas." />
-            <input id="p-categoria" placeholder="Categoría (ej. Luz)" />
-            <label>Tope (L) <input id="p-tope" type="number" min="0" step="0.01" /></label>
-            <button>Guardar presupuesto</button>
-            <div class="meta" style="margin-top:6px">
-              Tip: los gastos actualizan automáticamente el % de uso en “Presupuestos y uso”.
-            </div>
+        <div class="grid-2">
+          <!-- Nuevo gasto -->
+          <form id="form-gasto" class="card">
+            <h3>Nuevo gasto</h3>
+            <label>Fecha <input id="g-fecha" type="date" required /></label>
+            <input id="g-categoria" placeholder="Categoría (ej. Luz, Super)" required />
+            <input id="g-desc" placeholder="Descripción (opcional)" />
+            <label>Monto (L) <input id="g-monto" type="number" min="0" step="0.01" required /></label>
+            <label>Pagó
+              <select id="g-pagado">
+                <option value="esposa">Esposa</option>
+                <option value="esposo" selected>Esposo</option>
+              </select>
+            </label>
+            <button>Guardar</button>
           </form>
 
-          <hr class="sep"/>
+          <!-- Presupuesto + Ingresos -->
+          <div class="card">
+            <h3>Presupuesto por categoría (periodo actual)</h3>
+            <form id="form-presupuesto">
+              <input id="p-periodo" placeholder="Periodo YYYY-MM" readonly />
+              <input id="p-categoria" placeholder="Categoría (ej. Luz)" />
+              <label>Tope (L) <input id="p-tope" type="number" min="0" step="0.01" /></label>
+              <button>Guardar presupuesto</button>
+            </form>
 
-          <form id="form-ingresos">
-            <div class="row">
-              <label style="flex:1">Ingreso Esposa (L)
-                <input id="ing-esposa" type="number" min="0" step="0.01" />
-              </label>
-              <label style="flex:1">Ingreso Esposo (L)
-                <input id="ing-esposo" type="number" min="0" step="0.01" />
-              </label>
-            </div>
-            <div id="ing-info" class="meta" style="margin:6px 0 10px"></div>
-            <button id="btn-guardar-ingresos" type="button" class="btn">Guardar ingresos</button>
-            <button id="btn-traer-anterior" type="button" class="btn btn-ok">Traer del mes anterior</button>
-          </form>
-        </div>
-      </div>
+            <hr class="sep"/>
 
-      <div class="grid-2">
-        <div class="card">
-          <h3>Resumen mensual</h3>
-          <div class="row">
-            <label>Periodo</label>
-            <input id="r-periodo" placeholder="YYYY-MM" />
-            <button id="r-cargar">Calcular</button>
+            <form id="form-ingresos">
+              <div class="row">
+                <label style="flex:1">Ingreso Esposa (L)
+                  <input id="ing-esposa" type="number" min="0" step="0.01" />
+                </label>
+                <label style="flex:1">Ingreso Esposo (L)
+                  <input id="ing-esposo" type="number" min="0" step="0.01" />
+                </label>
+              </div>
+              <div id="ing-info" class="meta" style="margin:6px 0 10px"></div>
+              <button id="btn-guardar-ingresos" type="button" class="btn">Guardar ingresos</button>
+              <button id="btn-traer-anterior" type="button" class="btn btn-ok">Traer del mes anterior</button>
+            </form>
           </div>
-          <div id="r-out" class="mono"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Resumen mensual</h3>
+            <div class="row">
+              <label>Periodo</label>
+              <input id="r-periodo" placeholder="YYYY-MM" />
+              <button id="r-cargar">Calcular</button>
+            </div>
+            <div id="r-out" class="mono"></div>
+          </div>
+
+          <div class="card">
+            <h3>Presupuestos y uso</h3>
+            <ul id="lista-presupuestos" class="list"></ul>
+          </div>
         </div>
 
         <div class="card">
-          <h3>Presupuestos y uso</h3>
-          <ul id="lista-presupuestos" class="list"></ul>
+          <h3>Gastos recientes</h3>
+          <ul id="lista-gastos" class="list"></ul>
         </div>
-      </div>
-
-      <div class="card">
-        <h3>Gastos recientes</h3>
-        <ul id="lista-gastos" class="list"></ul>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
 
   <footer class="foot mono">
