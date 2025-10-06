@@ -15,34 +15,28 @@
       <h1>Hogar</h1>
     </div>
 
-    <nav class="tabs">
+    <!-- Pestañas ocultas hasta login -->
+    <nav class="tabs" id="tabs" style="display:none">
       <button data-tab="tareas" class="active">Tareas</button>
       <button data-tab="finanzas">Finanzas</button>
     </nav>
-
-    <!-- Estado de sesión -->
-    <div class="row" style="margin-left:auto;gap:8px">
-      <span id="who" class="meta">Sesión no iniciada</span>
-      <button id="btn-login" class="btn">Iniciar sesión</button>
-      <button id="btn-logout" class="btn btn-warn" style="display:none">Salir</button>
-    </div>
   </header>
 
-  <!-- Login simple (se muestra si no hay sesión) -->
-  <section id="auth-guard" class="card" style="display:none">
+  <!-- Bloque de LOGIN (visible por defecto) -->
+  <section id="auth-guard" class="card">
     <h3>Iniciar sesión</h3>
-    <form id="form-login" class="row" style="gap:8px">
-      <input id="login-email" type="email" placeholder="Correo" required />
-      <input id="login-pass" type="password" placeholder="Contraseña" required />
-      <button>Entrar</button>
-      <span id="login-msg" class="meta"></span>
-    </form>
-    <div class="meta" style="margin-top:6px">
-      Usa las cuentas que ya creaste en Authentication (ej. <strong>kevin.alvarenga93@gmail.com</strong>).
+    <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
+    <input id="auth-pass" placeholder="Contraseña" type="password" autocomplete="current-password" />
+    <div class="row">
+      <button id="btn-auth-login" class="btn">Entrar</button>
+    </div>
+    <div class="meta" style="margin-top:8px">
+      Usa las cuentas que creaste en Firebase Authentication (Correo/Contraseña).
     </div>
   </section>
 
-  <main>
+  <!-- APP (oculta hasta login) -->
+  <main id="app" style="display:none">
     <!-- TAREAS -->
     <section id="tareas" class="tab active">
       <div class="grid-2">
@@ -97,6 +91,7 @@
 
     <!-- FINANZAS -->
     <section id="finanzas" class="tab">
+      <!-- Control de periodo -->
       <div class="card">
         <div class="row" style="margin-top:8px">
           <label style="flex:1">Ir a
@@ -104,11 +99,13 @@
           </label>
           <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
         </div>
+
         <strong>Mes en curso:</strong>
         <span id="curr-period" class="badge"></span>
         <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
         <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
         <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
+
         <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
       </div>
 
