@@ -9,7 +9,6 @@
 <body>
   <div class="bg-hero"></div>
 
-  <!-- Header -->
   <header class="header">
     <div class="brand">
       <div class="logo">H</div>
@@ -21,31 +20,28 @@
       <button data-tab="finanzas">Finanzas</button>
     </nav>
 
-    <!-- Info de usuario (visible tras login) -->
-    <div id="user-pill" class="mono badge hidden" style="gap:10px;">
-      <span id="user-email"></span>
+    <div class="row">
+      <span id="user-pill" class="mono badge hidden">Sesión: <span id="user-email"></span></span>
       <button id="btn-logout" class="btn btn-warn">Cerrar sesión</button>
     </div>
   </header>
 
   <main>
-    <!-- LOGIN (visible por defecto; se oculta tras login) -->
+    <!-- LOGIN: visible por defecto -->
     <section id="auth-guard" class="card">
       <h3>Iniciar sesión</h3>
       <input id="auth-email" placeholder="correo@tu-dominio.com" autocomplete="email" />
       <input id="auth-pass" placeholder="Contraseña" type="password" autocomplete="current-password" />
-
-      <div class="row" style="margin-top:8px">
+      <div class="row">
         <button id="btn-auth-login" class="btn">Entrar</button>
       </div>
-
       <div class="meta" style="margin-top:8px">
         Usa las cuentas que creaste en Firebase Authentication (Correo/Contraseña).
       </div>
     </section>
 
-    <!-- ===================== TAREAS ===================== -->
-    <section id="tareas" class="tab active" data-guarded>
+    <!-- TAREAS (protegido) -->
+    <section id="tareas" class="tab active hidden" data-guarded>
       <div class="grid-2">
         <form id="form-tarea" class="card">
           <h3>Nueva tarea</h3>
@@ -96,23 +92,23 @@
       </div>
     </section>
 
-    <!-- ===================== FINANZAS ===================== -->
-    <section id="finanzas" class="tab" data-guarded>
+    <!-- FINANZAS (protegido) -->
+    <section id="finanzas" class="tab hidden" data-guarded>
       <!-- Control de periodo -->
       <div class="card">
-        <div class="row" style="margin-top:8px">
-          <label style="flex:1">Ir a
-            <select id="goto-period"></select>
-          </label>
-          <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
-        </div>
-
         <div class="row" style="margin-top:8px">
           <strong>Mes en curso:</strong>
           <span id="curr-period" class="badge"></span>
           <button id="btn-ir-mes-actual" class="btn">Ir al mes del sistema</button>
           <button id="btn-cerrar-mes" class="btn btn-warn">Cerrar mes ▶</button>
           <button id="btn-reabrir-mes" class="btn btn-ok" style="display:none">Reabrir mes</button>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <label style="flex:1">Ir a
+            <select id="goto-period"></select>
+          </label>
+          <button id="btn-ir-periodo" class="btn">Cambiar mes</button>
         </div>
 
         <div id="curr-estado" class="meta" style="margin-top:6px;"></div>
@@ -140,7 +136,7 @@
           <h3>Presupuesto por categoría (periodo actual)</h3>
           <form id="form-presupuesto">
             <input id="p-periodo" placeholder="Periodo YYYY-MM" readonly
-              title="Se usa el mes en curso; cambia el mes arriba si lo necesitas." />
+                   title="Se usa el mes en curso; cambia el mes arriba si lo necesitas." />
             <input id="p-categoria" placeholder="Categoría (ej. Luz)" />
             <label>Tope (L) <input id="p-tope" type="number" min="0" step="0.01" /></label>
             <button>Guardar presupuesto</button>
@@ -173,7 +169,7 @@
           <div class="row">
             <label>Periodo</label>
             <input id="r-periodo" placeholder="YYYY-MM" />
-            <button id="r-cargar" class="btn">Calcular</button>
+            <button id="r-cargar">Calcular</button>
           </div>
           <div id="r-out" class="mono"></div>
         </div>

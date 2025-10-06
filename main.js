@@ -4,9 +4,34 @@
 import {
   db, auth, HOGAR_ID,
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
-  collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc,
-  deleteDoc, setDoc, orderBy, limit
+  collection, doc, getDoc, getDocs, query, where,
+  addDoc, updateDoc, deleteDoc, setDoc, orderBy, limit
 } from "./firebase.js";
+
+/* =======================
+   Blindaje inicial de UI
+======================= */
+const guarded = () => document.querySelectorAll('[data-guarded]');
+guarded().forEach(el => el.classList.add('hidden'));        // oculta todo lo sensible
+document.getElementById('user-pill')?.classList.add('hidden');
+document.getElementById('auth-guard')?.classList.remove('hidden'); // muestra login
+
+function applyGuardUI({ loggedIn, email }) {
+  const loginCard = document.getElementById('auth-guard');
+  const userPill  = document.getElementById('user-pill');
+  const userEmail = document.getElementById('user-email');
+
+  if (loggedIn) {
+    loginCard?.classList.add('hidden');
+    if (userEmail) userEmail.textContent = email || '';
+    userPill?.classList.remove('hidden');
+    guarded().forEach(el => el.classList.remove('hidden'));
+  } else {
+    userPill?.classList.add('hidden');
+    guarded().forEach(el => el.classList.add('hidden'));
+    loginCard?.classList.remove('hidden');
+  }
+}
 
 /* =======================
    Utilidades
@@ -19,19 +44,17 @@ const isYYYYMM = (s) => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 const nextMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`; };
 const previousMonth = (p) => { const [y,m]=p.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
 
+const ROLES = { esposa: 'Esposa', esposo: 'Esposo' };
 const DEFAULT_INCOME = { esposa: 18800, esposo: 27000 };
 
 /* =======================
-   Estado UI / Periodo
+   Estado Periodo
 ======================= */
 let CURRENT_PERIOD = localStorage.getItem("hogar_periodo_actual") || systemMonth();
-function setCurrentPeriod(p) {
-  CURRENT_PERIOD = p;
-  localStorage.setItem("hogar_periodo_actual", p);
-}
+function setCurrentPeriod(p) { CURRENT_PERIOD = p; localStorage.setItem("hogar_periodo_actual", p); }
 
 /* =======================
-   Referencias Firestore
+   Firestore refs
 ======================= */
 const colTareas       = collection(db, 'hogares', HOGAR_ID, 'tareas');
 const colGastos       = collection(db, 'hogares', HOGAR_ID, 'gastos');
@@ -40,72 +63,43 @@ const colIngresos     = collection(db, 'hogares', HOGAR_ID, 'ingresos'); // docI
 const colCerrados     = collection(db, 'hogares', HOGAR_ID, 'cerrados'); // docId = YYYY-MM {cerrado:true}
 
 /* =======================
-   LOGIN / LOGOUT (IDs del HTML)
+   Seguridad: membresía
 ======================= */
-const authGuard    = document.getElementById("auth-guard");
-const authEmail    = document.getElementById("auth-email");
-const authPass     = document.getElementById("auth-pass");
-const btnAuthLogin = document.getElementById("btn-auth-login");
-
-// Opcional (si los tienes en el header)
-const userPill    = document.getElementById("user-pill");
-const userEmailEl = document.getElementById("user-email");
-const btnLogout   = document.getElementById("btn-logout");
-
-// Mostrar/ocultar secciones protegidas
-function setProtectedVisible(show) {
-  document.querySelectorAll("[data-guarded]").forEach(el => {
-    el.classList.toggle("hidden", !show);
-  });
-  authGuard?.classList.toggle("hidden", show);
-  userPill?.classList.toggle("hidden", !show);
+async function isMember(uid) {
+  const d = await getDoc(doc(db, 'hogares', HOGAR_ID, 'miembros', uid));
+  return d.exists();
 }
-
-// Mensajes de error de Auth
-function authMessage(code) {
-  switch (code) {
-    case "auth/invalid-credential":
-    case "auth/invalid-email":
-    case "auth/user-not-found":
-    case "auth/wrong-password":
-      return "Correo o contraseña inválidos.";
-    case "auth/too-many-requests":
-      return "Demasiados intentos. Intenta más tarde.";
-    default:
-      return "No se pudo iniciar sesión.";
-  }
-}
-
-// Click en "Entrar"
-btnAuthLogin?.addEventListener("click", async () => {
-  try {
-    const email = authEmail?.value?.trim() || "";
-    const pass  = authPass?.value || "";
-    await signInWithEmailAndPassword(auth, email, pass);
-    // onAuthStateChanged pinta el resto
-  } catch (err) {
-    console.error(err);
-    alert(authMessage(err?.code));
-  }
-});
-
-// Enter en los inputs de login
-[authEmail, authPass].forEach(inp => {
-  inp?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") btnAuthLogin?.click();
-  });
-});
-
-// Logout si existe el botón
-btnLogout?.addEventListener("click", async () => {
-  try { await signOut(auth); } catch(e){ console.error(e); }
-});
-
-// Arrancar oculto
-setProtectedVisible(false);
 
 /* =======================
-   Datos: Ingresos / Cerrados
+   Auth
+======================= */
+document.getElementById('btn-auth-login')?.addEventListener('click', async () => {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  if (!email || !pass) return alert('Completa correo y contraseña.');
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (e) {
+    console.error(e); alert('Login inválido.');
+  }
+});
+
+document.getElementById('btn-logout')?.addEventListener('click', async () => {
+  await signOut(auth);
+  applyGuardUI({ loggedIn: false });
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { applyGuardUI({ loggedIn: false }); return; }
+  const ok = await isMember(user.uid);
+  if (!ok) { console.warn('No miembro del hogar.'); applyGuardUI({ loggedIn: false }); return; }
+  applyGuardUI({ loggedIn: true, email: user.email || 'Sesión activa' });
+  await onPeriodChange();
+  await renderTareas();
+});
+
+/* =======================
+   Datos: Ingresos / Cerrado
 ======================= */
 async function getIncomes(period) {
   const snap = await getDoc(doc(colIngresos, period));
@@ -118,23 +112,17 @@ async function getIncomes(period) {
 async function setIncomes(period, data) {
   await setDoc(doc(colIngresos, period), { esposa:+data.esposa||0, esposo:+data.esposo||0 }, { merge: true });
 }
-async function isClosed(period) {
-  const s = await getDoc(doc(colCerrados, period)); return s.exists();
-}
-async function markClosed(period) {
-  await setDoc(doc(colCerrados, period), { cerrado: true });
-}
-async function unmarkClosed(period) {
-  await deleteDoc(doc(colCerrados, period)).catch(()=>{});
-}
+async function isClosed(period) { const s = await getDoc(doc(colCerrados, period)); return s.exists(); }
+async function markClosed(period) { await setDoc(doc(colCerrados, period), { cerrado: true }); }
+async function unmarkClosed(period) { await deleteDoc(doc(colCerrados, period)).catch(()=>{}); }
 
 /* =======================
    Datos: Tareas
 ======================= */
 async function addTarea(t) { await addDoc(colTareas, t); }
 async function listTareas() {
-  const qy = query(colTareas, orderBy('creado_en','desc'));
-  const s = await getDocs(qy);
+  const q = query(colTareas, orderBy('creado_en','desc'));
+  const s = await getDocs(q);
   return s.docs.map(d => ({ id:d.id, ...d.data() }));
 }
 async function updateTarea(id, patch) { await updateDoc(doc(colTareas, id), patch); }
@@ -145,8 +133,8 @@ async function deleteTarea(id) { await deleteDoc(doc(colTareas, id)); }
 ======================= */
 async function addGasto(g) { await addDoc(colGastos, g); }
 async function listGastos(limitTo=60) {
-  const qy = query(colGastos, orderBy('creado_en','desc'), limit(limitTo));
-  const s = await getDocs(qy);
+  const q = query(colGastos, orderBy('creado_en','desc'), limit(limitTo));
+  const s = await getDocs(q);
   return s.docs.map(d => ({ id:d.id, ...d.data() }));
 }
 async function deleteG(id) { await deleteDoc(doc(colGastos, id)); }
@@ -155,24 +143,24 @@ async function deleteG(id) { await deleteDoc(doc(colGastos, id)); }
    Datos: Presupuestos
 ======================= */
 async function upsertPresupuesto(periodo, categoria, tope) {
-  const qy = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
-  const s = await getDocs(qy);
+  const q = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
+  const s = await getDocs(q);
   if (s.empty) { await addDoc(colPresupuestos, { periodo, categoria, tope:+tope||0 }); }
   else { await updateDoc(doc(colPresupuestos, s.docs[0].id), { tope:+tope||0 }); }
 }
 async function listPresupuestos(periodo) {
-  const qy = query(colPresupuestos, where('periodo','==',periodo));
-  const s = await getDocs(qy);
+  const q = query(colPresupuestos, where('periodo','==',periodo));
+  const s = await getDocs(q);
   return s.docs.map(d => ({ id:d.id, ...d.data() }));
 }
 async function deletePresupuesto(periodo, categoria) {
-  const qy = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
-  const s = await getDocs(qy);
+  const q = query(colPresupuestos, where('periodo','==',periodo), where('categoria','==',categoria));
+  const s = await getDocs(q);
   await Promise.all(s.docs.map(d => deleteDoc(doc(colPresupuestos, d.id))));
 }
 
 /* =======================
-   Meses conocidos (dropdown)
+   Meses conocidos
 ======================= */
 async function knownPeriods() {
   const set = new Set([CURRENT_PERIOD]);
@@ -181,13 +169,14 @@ async function knownPeriods() {
   pre.docs.forEach(d => d.data().periodo && set.add(d.data().periodo));
   return Array.from(set).sort();
 }
-function monthsAround(center, back=3, fwd=3) {
+function monthsAround(center, back=3, forward=3) {
   const [y,m] = center.split('-').map(Number);
   const base = new Date(y, m-1, 1);
   const out = [];
-  for (let i=-back; i<=fwd; i++) {
+  for (let i=-back; i<=forward; i++) {
     const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
-    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    out.push(k);
   }
   return Array.from(new Set(out));
 }
@@ -197,11 +186,11 @@ function monthsAround(center, back=3, fwd=3) {
 ======================= */
 const tabs = document.querySelectorAll('.tabs button');
 const sections = document.querySelectorAll('.tab');
-tabs.forEach(btn => btn?.addEventListener('click', () => {
+tabs.forEach(btn => btn.addEventListener('click', () => {
   tabs.forEach(b => b.classList.remove('active'));
   sections.forEach(s => s.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById(btn.dataset.tab)?.classList.add('active');
+  document.getElementById(btn.dataset.tab).classList.add('active');
 }));
 
 /* ---------- TAREAS UI ---------- */
@@ -232,10 +221,10 @@ tFiltroPersona?.addEventListener('change', renderTareas);
 tFiltroEstado?.addEventListener('change', renderTareas);
 
 async function renderTareas() {
-  const persona = tFiltroPersona?.value || 'todas';
-  const estado = tFiltroEstado?.value || 'todas';
+  if (document.getElementById('tareas')?.classList.contains('hidden')) return;
+  const persona = tFiltroPersona.value; // todas | esposa | esposo
+  const estado = tFiltroEstado.value;   // todas | pendiente | hecha
   const tareas = await listTareas();
-  if (!listaT) return;
   listaT.innerHTML = '';
 
   // métricas semanales (últimos 7 días)
@@ -244,11 +233,9 @@ async function renderTareas() {
   const sem = tareas.filter(t => now - new Date(t.creado_en).getTime() < semanaMs);
   const puntosHechos = { esposa: 0, esposo: 0 }, puntosPend = { esposa: 0, esposo: 0 };
   sem.forEach(t => { (t.estado === 'hecha' ? puntosHechos : puntosPend)[t.asignado] += t.esfuerzo; });
-  if (tMetricas) {
-    tMetricas.textContent =
+  tMetricas.textContent =
 `Hechos (7 días)  →  Esposa: ${puntosHechos.esposa} | Esposo: ${puntosHechos.esposo}
 Pendientes        →  Esposa: ${puntosPend.esposa}  | Esposo: ${puntosPend.esposo}`;
-  }
 
   tareas
     .filter(t => (persona === 'todas' || t.asignado === persona))
@@ -307,6 +294,10 @@ const btnIrPeriodo = document.getElementById('btn-ir-periodo');
 
 document.getElementById('g-fecha') && (document.getElementById('g-fecha').value = today());
 
+/* Inicio de campos de periodo cuando la UI ya está disponible */
+pPeriodo && (pPeriodo.value = CURRENT_PERIOD);
+rPeriodo && (rPeriodo.value = CURRENT_PERIOD);
+
 /* Formularios */
 formG?.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -349,11 +340,9 @@ btnTraerAnterior?.addEventListener('click', async () => {
   const target = pPeriodo.value || CURRENT_PERIOD;
   const prev = previousMonth(target);
 
-  // Ingresos
   const prevInc = await getIncomes(prev);
   await setIncomes(target, prevInc);
 
-  // Presupuestos (sin duplicar)
   const [preTarget, prePrev] = await Promise.all([listPresupuestos(target), listPresupuestos(prev)]);
   const existentes = new Set(preTarget.map(b => b.categoria.toLowerCase()));
   let added = 0;
@@ -382,7 +371,6 @@ btnCerrarMes?.addEventListener('click', async () => {
 
   await markClosed(current);
 
-  // Copiar presupuestos e ingresos al siguiente
   const next = nextMonth(current);
   const presActual = await listPresupuestos(current);
   for (const b of presActual) await upsertPresupuesto(next, b.categoria, b.tope);
@@ -414,8 +402,8 @@ btnReabrirMes?.addEventListener('click', async () => {
 async function renderAllFinance() { await renderGastos(); await renderPresupuestos(); await renderResumen(); }
 
 async function renderGastos() {
+  if (document.getElementById('finanzas')?.classList.contains('hidden')) return;
   const gastos = await listGastos();
-  if (!listaG) return;
   listaG.innerHTML = '';
   gastos.forEach(g => {
     const li = document.createElement('li'); li.className = 'item';
@@ -435,14 +423,14 @@ async function renderGastos() {
 }
 
 async function renderPresupuestos() {
-  const p = (rPeriodo?.value || CURRENT_PERIOD);
+  if (document.getElementById('finanzas')?.classList.contains('hidden')) return;
+  const p = (rPeriodo.value || CURRENT_PERIOD);
   const [gastos, presupuestos] = await Promise.all([
     listGastos(1000).then(arr => arr.filter(g => g.periodo === p)),
     listPresupuestos(p)
   ]);
 
   const porCat = gastos.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria] || 0) + g.monto; return acc; }, {});
-  if (!listaP) return;
   listaP.innerHTML = '';
   presupuestos.forEach(b => {
     const usado = porCat[b.categoria] || 0;
@@ -465,7 +453,8 @@ async function renderPresupuestos() {
 }
 
 async function renderResumen() {
-  const p = (rPeriodo?.value || CURRENT_PERIOD);
+  if (document.getElementById('finanzas')?.classList.contains('hidden')) return;
+  const p = (rPeriodo.value || CURRENT_PERIOD);
   const inc = await getIncomes(p);
   const sum = (+inc.esposa || 0) + (+inc.esposo || 0);
 
@@ -482,9 +471,8 @@ async function renderResumen() {
   };
   const balance = { esposa: pagado.esposa - cuotas.esposa, esposo: pagado.esposo - cuotas.esposo };
 
-  if (rOut) {
-    const cerrado = await isClosed(p);
-    rOut.textContent =
+  const cerrado = await isClosed(p);
+  rOut.textContent =
 `Periodo ${p}  ${cerrado ? '— [CERRADO]' : ''}
 Ingresos →  Esposa: ${L(inc.esposa)} | Esposo: ${L(inc.esposo)}  (proporciones: ${sum>0?(inc.esposa/sum*100).toFixed(1):50}% / ${sum>0?(inc.esposo/sum*100).toFixed(1):50}%)
 Total Gastos: ${L(total)}
@@ -492,30 +480,29 @@ Cuotas teóricas →  Esposa: ${L(cuotas.esposa)} | Esposo: ${L(cuotas.esposo)}
 Pagado           →  Esposa: ${L(pagado.esposa)} | Esposo: ${L(pagado.esposo)}
 Balance          →  Esposa: ${balance.esposa>=0?'a favor':'en contra'} ${L(Math.abs(balance.esposa))}
                     Esposo: ${balance.esposo>=0?'a favor':'en contra'} ${L(Math.abs(balance.esposo))}`;
-  }
 }
 
 async function loadIncomeFields() {
-  const period = pPeriodo?.value || CURRENT_PERIOD;
+  const period = pPeriodo.value || CURRENT_PERIOD;
   const inc = await getIncomes(period);
-  if (ingEsposa) ingEsposa.value = inc.esposa;
-  if (ingEsposo) ingEsposo.value = inc.esposo;
+  ingEsposa.value = inc.esposa;
+  ingEsposo.value = inc.esposo;
 
   const sum = (+inc.esposa||0) + (+inc.esposo||0);
   const pe = sum>0 ? (inc.esposa/sum*100).toFixed(1) : '50.0';
   const po = sum>0 ? (inc.esposo/sum*100).toFixed(1) : '50.0';
-  if (ingInfo) ingInfo.textContent = `Proporciones para ${period}: Esposa ${pe}% — Esposo ${po}%`;
+  ingInfo.textContent = `Proporciones para ${period}: Esposa ${pe}% — Esposo ${po}%`;
 }
 
 async function updatePeriodHeader() {
   const current = CURRENT_PERIOD;
-  if (currPeriodSpan) currPeriodSpan.textContent = current;
+  currPeriodSpan.textContent = current;
   const closed = await isClosed(current);
-  if (currEstado) currEstado.textContent = closed
+  currEstado.textContent = closed
     ? 'Estado: CERRADO (puedes reabrirlo si necesitas editarlo).'
     : 'Estado: ABIERTO';
-  if (btnReabrirMes) btnReabrirMes.style.display = closed ? '' : 'none';
-  if (btnCerrarMes)  btnCerrarMes.style.display  = closed ? 'none' : '';
+  btnReabrirMes.style.display = closed ? '' : 'none';
+  btnCerrarMes.style.display  = closed ? 'none' : '';
 }
 
 async function refreshMonthDropdown() {
@@ -523,7 +510,6 @@ async function refreshMonthDropdown() {
   if (options.length === 0) options = monthsAround(CURRENT_PERIOD, 4, 2);
   else options = Array.from(new Set([...options, ...monthsAround(CURRENT_PERIOD, 2, 2)])).sort();
 
-  if (!monthSelect) return;
   monthSelect.innerHTML = '';
   options.forEach(p => {
     const opt = document.createElement('option');
@@ -534,33 +520,13 @@ async function refreshMonthDropdown() {
 }
 
 async function onPeriodChange() {
-  if (pPeriodo) pPeriodo.value = CURRENT_PERIOD;
-  if (rPeriodo) rPeriodo.value = CURRENT_PERIOD;
+  pPeriodo && (pPeriodo.value = CURRENT_PERIOD);
+  rPeriodo && (rPeriodo.value = CURRENT_PERIOD);
   await updatePeriodHeader();
   await loadIncomeFields();
   await renderAllFinance();
   await refreshMonthDropdown();
 }
 
-/* =======================
-   Sesión → pintar/ocultar
-======================= */
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    setProtectedVisible(true);
-    if (userEmailEl) userEmailEl.textContent = user.email || "Conectado";
-    // Inicializa valores visibles
-    if (pPeriodo) pPeriodo.value = CURRENT_PERIOD;
-    if (rPeriodo) rPeriodo.value = CURRENT_PERIOD;
-    try {
-      await renderTareas();
-      await onPeriodChange();
-    } catch (e) { console.error(e); }
-  } else {
-    setProtectedVisible(false);
-    if (userEmailEl) userEmailEl.textContent = "";
-  }
-});
-
-// Mensaje de pie (opcional)
-console.info("[firebase] conectado a", auth.app.options.projectId);
+/* Inicial */
+await onPeriodChange().catch(()=>{ /* se completará tras login */ });
